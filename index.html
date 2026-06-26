@@ -1,1487 +1,2982 @@
 <!DOCTYPE html>
-<html lang='ko'>
+<html lang="ko">
 <head>
-<meta charset='UTF-8'>
-<meta name='viewport' content='width=device-width, initial-scale=1.0'>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>깡비서 문서뚝딱</title>
 <style>
-*{box-sizing:border-box;margin:0;padding:0;}
-body{font-family:'맑은 고딕',sans-serif;font-size:13px;background:#f0f2f5;display:flex;height:100vh;overflow:hidden;}
-#sidebar{width:220px;min-width:180px;background:#1e293b;color:#e2e8f0;display:flex;flex-direction:column;overflow:hidden;flex-shrink:0;}
-#sidebar-header{padding:14px 12px 10px;border-bottom:1px solid #334155;}
-#sidebar-header h1{font-size:15px;font-weight:700;color:#fff;margin-bottom:8px;}
-#search-box{width:100%;padding:6px 8px;border-radius:6px;border:1px solid #475569;background:#334155;color:#e2e8f0;font-size:12px;outline:none;}
-#search-box::placeholder{color:#94a3b8;}
-#tpl-list{flex:1;overflow-y:auto;padding:8px 0;}
-#tpl-list::-webkit-scrollbar{width:4px;}
-#tpl-list::-webkit-scrollbar-thumb{background:#475569;border-radius:2px;}
-.center-group{}
-.center-label{padding:8px 12px 4px;font-size:10px;color:#94a3b8;text-transform:uppercase;letter-spacing:.5px;font-weight:600;}
-.tpl-item{padding:8px 12px;cursor:pointer;border-left:3px solid transparent;transition:all .15s;display:flex;align-items:center;gap:6px;}
-.tpl-item:hover{background:#334155;border-left-color:#60a5fa;}
-.tpl-item.active{background:#1d4ed8;border-left-color:#93c5fd;color:#fff;}
-.tpl-item-name{flex:1;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-.tpl-item-del{opacity:0;font-size:10px;color:#f87171;padding:2px 4px;border-radius:3px;flex-shrink:0;}
-.tpl-item:hover .tpl-item-del{opacity:1;}
-.tpl-item-del:hover{background:#7f1d1d;}
-#sidebar-footer{padding:10px 12px;border-top:1px solid #334155;display:flex;gap:6px;}
-.btn-sm{padding:5px 10px;border-radius:5px;border:none;cursor:pointer;font-size:11px;font-weight:600;}
-.btn-new{background:#3b82f6;color:#fff;flex:1;}
-.btn-new:hover{background:#2563eb;}
-.btn-cfg{background:#475569;color:#e2e8f0;}
-.btn-cfg:hover{background:#334155;}
-#main{flex:1;display:flex;flex-direction:column;overflow:hidden;}
-#main-header{background:#fff;padding:10px 16px;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;gap:10px;}
-#main-header h2{font-size:14px;font-weight:700;color:#1e293b;flex:1;}
-.badge{font-size:10px;padding:2px 8px;border-radius:10px;background:#dbeafe;color:#1d4ed8;font-weight:600;}
-#main-body{flex:1;overflow-y:auto;padding:16px;}
-#welcome{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;color:#94a3b8;gap:8px;}
-#welcome h3{font-size:18px;color:#475569;}
-#editor{display:none;}
-.section-card{background:#fff;border-radius:10px;border:1px solid #e2e8f0;margin-bottom:12px;overflow:hidden;}
-.section-card-header{padding:10px 14px;background:#f8fafc;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;gap:8px;cursor:pointer;}
-.section-card-header h3{font-size:12px;font-weight:700;color:#374151;flex:1;}
-.section-card-body{padding:14px;}
-.tab-bar{display:flex;border-bottom:1px solid #e2e8f0;padding:0 14px;}
-.tab-btn{padding:8px 12px;border:none;background:none;cursor:pointer;font-size:12px;color:#64748b;border-bottom:2px solid transparent;margin-bottom:-1px;}
-.tab-btn.active{color:#1d4ed8;border-bottom-color:#1d4ed8;font-weight:600;}
-.tab-panel{display:none;padding:14px;}
-.tab-panel.active{display:block;}
-textarea.input-area{width:100%;min-height:80px;padding:8px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;resize:vertical;outline:none;}
-textarea.input-area:focus{border-color:#3b82f6;}
-.btn-analyze{padding:6px 12px;background:#8b5cf6;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:12px;margin-top:6px;}
-.btn-analyze:hover{background:#7c3aed;}
-.fields-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
-@media(max-width:700px){.fields-grid{grid-template-columns:1fr;}}
-.field-group{display:flex;flex-direction:column;gap:4px;}
-.field-group label{font-size:11px;color:#64748b;font-weight:600;}
-.field-group input,.field-group select{padding:6px 8px;border:1px solid #e2e8f0;border-radius:5px;font-size:12px;outline:none;}
-.field-group input:focus{border-color:#3b82f6;}
-.field-derived{background:#f0fdf4;border-color:#86efac !important;color:#166534;}
-.field-formula{background:#fefce8;border-color:#fde047 !important;color:#713f12;}
-.ai-analysis-box{background:#f0f9ff;border:1px solid #bae6fd;border-radius:8px;padding:12px;font-size:12px;color:#0369a1;white-space:pre-wrap;line-height:1.8;}
-.preview-box{background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:16px;font-size:12px;line-height:2;white-space:pre-wrap;min-height:100px;color:#1e293b;font-family:'맑은 고딕',sans-serif;}
-.action-bar{display:flex;flex-wrap:wrap;gap:8px;padding:14px;}
-.btn-action{padding:6px 14px;border-radius:6px;border:none;cursor:pointer;font-size:12px;font-weight:600;}
-.btn-primary{background:#3b82f6;color:#fff;}
-.btn-primary:hover{background:#2563eb;}
-.btn-success{background:#10b981;color:#fff;}
-.btn-success:hover{background:#059669;}
-.btn-warn{background:#f59e0b;color:#fff;}
-.btn-warn:hover{background:#d97706;}
-.btn-danger{background:#ef4444;color:#fff;}
-.btn-danger:hover{background:#dc2626;}
-.btn-gray{background:#e2e8f0;color:#374151;}
-.btn-gray:hover{background:#cbd5e1;}
-/* MODAL */
-.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1000;align-items:center;justify-content:center;}
-.modal-overlay.open{display:flex;}
-.modal{background:#fff;border-radius:12px;width:620px;max-width:95vw;max-height:90vh;display:flex;flex-direction:column;overflow:hidden;}
-.modal-lg{width:800px;}
-.modal-header{padding:14px 18px;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;}
-.modal-header h3{flex:1;font-size:14px;font-weight:700;}
-.modal-close{background:none;border:none;font-size:18px;cursor:pointer;color:#64748b;padding:2px 6px;}
-.modal-body{flex:1;overflow-y:auto;padding:18px;}
-.modal-footer{padding:12px 18px;border-top:1px solid #e2e8f0;display:flex;justify-content:flex-end;gap:8px;}
-.form-row{display:flex;flex-direction:column;gap:4px;margin-bottom:12px;}
-.form-row label{font-size:11px;font-weight:600;color:#374151;}
-.form-row input,.form-row select,.form-row textarea{padding:7px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:12px;outline:none;}
-.form-row input:focus,.form-row select:focus,.form-row textarea:focus{border-color:#3b82f6;}
-.form-row textarea{min-height:60px;resize:vertical;}
-.settings-tabs{display:flex;border-bottom:1px solid #e2e8f0;gap:2px;padding:0 4px;}
-.stab{padding:8px 14px;border:none;background:none;cursor:pointer;font-size:12px;color:#64748b;border-bottom:2px solid transparent;}
-.stab.active{color:#1d4ed8;border-bottom-color:#1d4ed8;font-weight:600;}
-.stab-panel{display:none;padding:16px 0;}
-.stab-panel.active{display:block;}
-.field-editor-row{display:grid;grid-template-columns:1fr 1fr 90px 1fr 60px 60px 30px;gap:6px;align-items:center;margin-bottom:6px;}
-.field-editor-row input,.field-editor-row select{padding:5px 7px;border:1px solid #d1d5db;border-radius:4px;font-size:11px;outline:none;width:100%;}
-.field-editor-row input:focus,.field-editor-row select:focus{border-color:#3b82f6;}
-.field-del-btn{background:none;border:none;color:#ef4444;cursor:pointer;font-size:14px;padding:2px;}
-.center-card{border:1px solid #e2e8f0;border-radius:8px;padding:12px;margin-bottom:10px;}
-.center-card-header{display:flex;align-items:center;gap:8px;margin-bottom:10px;}
-.center-card-header span{font-weight:700;font-size:13px;flex:1;}
-.manager-row{display:grid;grid-template-columns:1fr 1fr 1fr 1fr 28px;gap:6px;margin-bottom:6px;}
-.manager-row input{padding:5px 7px;border:1px solid #d1d5db;border-radius:4px;font-size:11px;outline:none;width:100%;}
-.history-item{padding:8px;border:1px solid #e2e8f0;border-radius:6px;margin-bottom:6px;font-size:11px;}
-.history-item-header{display:flex;justify-content:space-between;color:#64748b;margin-bottom:4px;}
-.history-item-body{color:#374151;white-space:pre-wrap;max-height:80px;overflow:hidden;font-size:10px;}
-.chip{display:inline-block;padding:2px 8px;border-radius:10px;font-size:10px;background:#dbeafe;color:#1d4ed8;margin:2px;}
-.warn-text{color:#b45309;font-size:11px;background:#fef3c7;padding:6px 10px;border-radius:5px;margin-bottom:10px;}
-.auto-suggest{background:#f0fdf4;border:1px solid #86efac;border-radius:6px;padding:10px;margin-top:8px;font-size:12px;}
-.auto-suggest-title{font-weight:700;color:#166534;margin-bottom:6px;}
-.suggest-field{display:flex;align-items:center;gap:6px;margin-bottom:4px;}
-.suggest-field label{font-size:11px;color:#374151;width:80px;flex-shrink:0;}
-.suggest-field input{flex:1;padding:4px 8px;border:1px solid #86efac;border-radius:4px;font-size:11px;}
-.suggest-apply-btn{padding:4px 10px;background:#10b981;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:11px;margin-top:6px;}
+/* ── 디자인 토큰 ── */
+:root {
+  --bg:       #F0EFEC;
+  --surface:  #FFFFFF;
+  --s2:       #F7F6F3;
+  --s3:       #ECEAE5;
+  --border:   rgba(0,0,0,0.09);
+  --border2:  rgba(0,0,0,0.16);
+  --text:     #17171A;
+  --t2:       #57575E;
+  --t3:       #9898A0;
+  --blue:     #1860C4;
+  --blue-bg:  #EBF1FD;
+  --blue-t:   #0D40A0;
+  --green:    #0A7A54;
+  --green-bg: #E3F5EC;
+  --green-t:  #065C3C;
+  --amber:    #996600;
+  --amber-bg: #FEF5DC;
+  --amber-t:  #7A4F00;
+  --red:      #C0392B;
+  --red-bg:   #FDECEB;
+  --red-t:    #992D22;
+  --purple:   #5B4FCF;
+  --purple-bg:#EEEDFB;
+  --purple-t: #3D3499;
+  --r:        8px;
+  --r-sm:     5px;
+  --r-lg:     12px;
+  --topbar:   52px;
+  --left:     252px;
+  --shadow:   0 1px 4px rgba(0,0,0,0.07);
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo',
+               'Malgun Gothic', sans-serif;
+  background: var(--bg); color: var(--text);
+  font-size: 13px; line-height: 1.5;
+  height: 100vh; overflow: hidden;
+}
+
+/* ══ 상단바 ══ */
+.topbar {
+  position: fixed; top: 0; left: 0; right: 0;
+  height: var(--topbar);
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center;
+  padding: 0 16px; gap: 0; z-index: 100;
+  box-shadow: var(--shadow);
+}
+.topbar-logo {
+  font-size: 14px; font-weight: 700; letter-spacing: -.3px;
+  white-space: nowrap; margin-right: 20px; color: var(--text);
+}
+/* 센터 탭 */
+.center-tabs {
+  display: flex; align-items: center; gap: 2px;
+  overflow-x: auto; flex: 1;
+  /* 스크롤바 숨김 */
+  scrollbar-width: none;
+}
+.center-tabs::-webkit-scrollbar { display: none; }
+.ctab {
+  display: flex; align-items: center; gap: 6px;
+  padding: 6px 14px; border-radius: var(--r-sm);
+  cursor: pointer; white-space: nowrap;
+  font-size: 12px; font-weight: 500; color: var(--t2);
+  transition: background .12s, color .12s;
+  flex-shrink: 0;
+}
+.ctab:hover { background: var(--s2); color: var(--text); }
+.ctab.on {
+  background: var(--blue-bg); color: var(--blue-t);
+  font-weight: 700;
+}
+.ctab-dot {
+  width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0;
+}
+/* 상단 우측 버튼들 */
+.topbar-right {
+  display: flex; align-items: center; gap: 8px;
+  margin-left: 12px; flex-shrink: 0;
+}
+.search-wrap {
+  display: flex; align-items: center; gap: 7px;
+  padding: 7px 12px;
+  background: var(--s2); border: 1px solid var(--border);
+  border-radius: var(--r-sm); width: 180px;
+}
+.search-wrap svg { width: 13px; height: 13px; color: var(--t3); flex-shrink: 0; }
+.search-wrap input {
+  border: none; outline: none; background: transparent;
+  font-size: 12px; font-family: inherit; color: var(--text); width: 100%;
+}
+.search-wrap input::placeholder { color: var(--t3); }
+
+/* ══ 레이아웃 ══ */
+.layout {
+  display: flex;
+  margin-top: var(--topbar);
+  height: calc(100vh - var(--topbar));
+}
+
+/* ══ 좌측 패널 ══ */
+.left-panel {
+  width: var(--left);
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  display: flex; flex-direction: column;
+  overflow: hidden; flex-shrink: 0;
+}
+.lp-section { display: flex; flex-direction: column; }
+.lp-section.tpl-sec { flex: 1; overflow: hidden; min-height: 0; }
+.lp-section.hist-sec { flex-shrink: 0; max-height: 260px; border-top: 1px solid var(--border); }
+.lp-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 14px 8px;
+}
+.lp-title {
+  font-size: 10px; font-weight: 700; color: var(--t3);
+  letter-spacing: .08em; text-transform: uppercase;
+}
+.lp-list { overflow-y: auto; padding: 0 8px 8px; flex: 1; }
+.lp-list::-webkit-scrollbar { width: 4px; }
+.lp-list::-webkit-scrollbar-thumb { background: var(--s3); border-radius: 2px; }
+
+/* 템플릿 아이템 */
+.tpl-item {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 9px 10px; border-radius: var(--r-sm);
+  cursor: pointer; transition: background .12s;
+  margin-bottom: 2px;
+}
+.tpl-item:hover { background: var(--s2); }
+.tpl-item.on { background: var(--blue-bg); }
+.tpl-item-left { display: flex; align-items: center; gap: 9px; min-width: 0; }
+.tpl-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.tpl-info { min-width: 0; }
+.tpl-name {
+  font-size: 12px; font-weight: 600; white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis;
+  color: var(--text);
+}
+.tpl-item.on .tpl-name { color: var(--blue-t); }
+.tpl-meta { font-size: 10px; color: var(--t3); margin-top: 1px; }
+.tpl-dday {
+  font-size: 10px; font-weight: 700; padding: 2px 7px;
+  border-radius: 10px; flex-shrink: 0; margin-left: 4px;
+}
+.tpl-dday.urg { background: var(--red-bg); color: var(--red-t); }
+.tpl-dday.sn  { background: var(--amber-bg); color: var(--amber-t); }
+.tpl-dday.ok  { background: var(--green-bg); color: var(--green-t); }
+
+/* 이력 아이템 */
+.hist-item {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 8px 10px; border-radius: var(--r-sm);
+  cursor: pointer; transition: background .12s; margin-bottom: 2px;
+}
+.hist-item:hover { background: var(--s2); }
+.hist-item.on { background: var(--s2); }
+.hist-name { font-size: 12px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hist-meta { font-size: 10px; color: var(--t3); margin-top: 1px; }
+.hist-reuse {
+  font-size: 10px; padding: 2px 7px; border-radius: var(--r-sm);
+  border: 1px solid var(--border2); background: var(--surface);
+  cursor: pointer; white-space: nowrap; flex-shrink: 0; margin-left: 4px;
+  font-family: inherit; color: var(--t2);
+}
+.hist-reuse:hover { background: var(--s2); }
+
+/* ══ 우측 작업 영역 ══ */
+.work-area {
+  flex: 1; overflow: hidden; display: flex; flex-direction: column;
+}
+
+/* 빈 상태 */
+.blank-state {
+  flex: 1; display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  color: var(--t3); text-align: center; padding: 40px;
+}
+.blank-state svg { width: 48px; height: 48px; opacity: .25; margin-bottom: 16px; }
+.blank-state h3 { font-size: 15px; font-weight: 600; color: var(--t2); margin-bottom: 6px; }
+.blank-state p  { font-size: 12px; line-height: 1.7; }
+
+/* 작업 헤더 */
+.work-header {
+  padding: 14px 20px 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  display: flex; align-items: center; justify-content: space-between;
+  flex-shrink: 0;
+}
+.work-header-left { display: flex; align-items: center; gap: 10px; }
+.work-doc-title { font-size: 15px; font-weight: 700; }
+.work-doc-sub   { font-size: 11px; color: var(--t3); margin-top: 2px; }
+
+/* 작업 바디: 입력 + 미리보기 */
+.work-body {
+  flex: 1; display: grid;
+  grid-template-columns: 310px 1fr;
+  overflow: hidden;
+}
+
+/* 입력 패널 */
+.input-panel {
+  border-right: 1px solid var(--border);
+  overflow-y: auto; padding: 16px 16px 24px;
+  background: var(--s2);
+}
+.input-panel::-webkit-scrollbar { width: 4px; }
+.input-panel::-webkit-scrollbar-thumb { background: var(--s3); border-radius: 2px; }
+
+/* 미리보기 패널 */
+.preview-panel {
+  overflow-y: auto; padding: 16px 20px 24px;
+  background: var(--surface);
+}
+.preview-panel::-webkit-scrollbar { width: 4px; }
+.preview-panel::-webkit-scrollbar-thumb { background: var(--s3); border-radius: 2px; }
+
+/* ── 입력 섹션 ── */
+.input-section {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--r-lg); padding: 14px 15px; margin-bottom: 10px;
+}
+.isec-title {
+  font-size: 11px; font-weight: 700; color: var(--t2);
+  margin-bottom: 12px; display: flex; align-items: center; gap: 6px;
+}
+.fg { margin-bottom: 10px; }
+.fg:last-child { margin-bottom: 0; }
+.flabel {
+  font-size: 11px; font-weight: 600; color: var(--t2);
+  margin-bottom: 4px; display: flex; align-items: center; gap: 5px;
+}
+.tag-sm {
+  font-size: 9px; font-weight: 700; padding: 1px 6px;
+  border-radius: 3px; line-height: 1.5;
+}
+.tag-calc   { background: var(--green-bg); color: var(--green-t); }
+.tag-prev   { background: var(--purple-bg); color: var(--purple-t); }
+.tag-warn   { background: var(--amber-bg); color: var(--amber-t); }
+
+input[type=text], textarea, select {
+  width: 100%; padding: 7px 10px;
+  border: 1px solid var(--border2); border-radius: var(--r-sm);
+  font-size: 13px; font-family: inherit;
+  background: var(--surface); color: var(--text);
+  outline: none; transition: border-color .12s;
+}
+input[type=text]:focus, textarea:focus, select:focus { border-color: var(--blue); }
+input.calc { background: var(--green-bg); color: var(--green-t); font-weight: 600; border-color: transparent; }
+input.warn-field { border-color: var(--amber); background: var(--amber-bg); }
+textarea { resize: vertical; min-height: 64px; line-height: 1.65; }
+
+/* 경고 배너 */
+.warn-banner {
+  display: none; align-items: flex-start; gap: 10px;
+  background: var(--amber-bg); border: 1px solid rgba(153,102,0,.2);
+  border-radius: var(--r); padding: 11px 13px; margin-bottom: 10px;
+}
+.warn-banner svg { width: 15px; height: 15px; color: var(--amber-t); flex-shrink: 0; margin-top: 1px; }
+.warn-banner p { font-size: 12px; color: var(--amber-t); line-height: 1.6; }
+
+/* AI 분석 섹션 */
+.ai-section {
+  background: var(--purple-bg);
+  border: 1px solid rgba(91,79,207,.2);
+  border-radius: var(--r-lg); padding: 13px 14px; margin-bottom: 10px;
+}
+.ai-sec-top {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 10px;
+}
+.ai-sec-label {
+  font-size: 11px; font-weight: 700; color: var(--purple-t);
+  display: flex; align-items: center; gap: 5px;
+}
+.ai-editable {
+  font-size: 12px; line-height: 1.75;
+  background: var(--surface); border-radius: var(--r-sm);
+  padding: 9px 11px; border: 1px solid var(--border);
+  white-space: pre-wrap; min-height: 52px; outline: none;
+}
+.ai-editable:focus { border-color: var(--purple); }
+
+/* 추가입력 */
+.extra-section {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--r-lg); padding: 13px 14px;
+}
+
+/* ── 복사 바 ── */
+.copy-bar {
+  padding: 12px 20px;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  display: flex; align-items: center; gap: 8px;
+  flex-shrink: 0; flex-wrap: wrap;
+}
+.toast {
+  display: inline-flex; align-items: center; gap: 5px;
+  background: var(--green-bg); color: var(--green-t);
+  font-size: 11px; font-weight: 700;
+  padding: 5px 12px; border-radius: var(--r-sm);
+  opacity: 0; transition: opacity .2s; pointer-events: none;
+}
+.toast.show { opacity: 1; }
+
+/* ── 버튼 ── */
+.btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 7px 14px; border-radius: var(--r-sm);
+  border: 1px solid var(--border2);
+  background: var(--surface); color: var(--text);
+  font-size: 12px; font-weight: 500; cursor: pointer;
+  font-family: inherit; transition: all .12s; white-space: nowrap;
+}
+.btn:hover { background: var(--s2); }
+.btn.solid { background: var(--text); color: #fff; border-color: var(--text); }
+.btn.solid:hover { opacity: .85; }
+.btn.blue  { background: var(--blue-bg); color: var(--blue-t); border-color: transparent; }
+.btn.blue:hover { opacity: .85; }
+.btn.green { background: var(--green-bg); color: var(--green-t); border-color: transparent; }
+.btn.danger{ background: var(--red-bg); color: var(--red-t); border-color: transparent; }
+.btn.sm    { padding: 5px 10px; font-size: 11px; }
+.btn:disabled { opacity: .4; cursor: default; }
+.btn svg   { width: 13px; height: 13px; }
+.btn-icon  {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 30px; height: 30px; border-radius: var(--r-sm);
+  border: 1px solid var(--border2); background: transparent;
+  cursor: pointer; transition: background .12s; color: var(--t2);
+}
+.btn-icon:hover { background: var(--s2); }
+.btn-icon svg { width: 15px; height: 15px; }
+
+/* ── 미리보기 문서 ── */
+.preview-title-bar {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 14px;
+}
+.preview-label { font-size: 12px; font-weight: 700; color: var(--t2); }
+.doc-wrap { font-size: 13px; }
+.doc-title { font-size: 14px; font-weight: 700; margin-bottom: 14px; padding-bottom: 10px; border-bottom: 1px solid var(--border); }
+.doc-body p  { margin: 2px 0; line-height: 1.9; white-space: pre-wrap; }
+.doc-body br { line-height: .5; }
+.unit-note   { font-size: 11px; color: var(--t3); text-align: right; margin: 8px 0 2px; }
+.doc-table   { width: 100%; border-collapse: collapse; margin-bottom: 10px; font-size: 12px; }
+.doc-table th {
+  background: var(--s2); font-weight: 600; text-align: center;
+  padding: 6px 10px; border: 1px solid var(--border2);
+}
+.doc-table td {
+  text-align: center; padding: 6px 10px; border: 1px solid var(--border2);
+}
+.doc-table td.neg { color: var(--red-t); font-weight: 600; }
+.doc-table td.pos { color: var(--green-t); font-weight: 600; }
+.preview-overflow { overflow-x: auto; }
+
+/* ── 모달 (MHT 업로드 + 설정) ── */
+.modal-bg {
+  display: none; position: fixed; inset: 0;
+  background: rgba(0,0,0,.48); z-index: 200;
+  overflow-y: auto; padding: 40px 20px;
+}
+.modal-bg.open { display: block; }
+.modal {
+  max-width: 660px; margin: 0 auto;
+  background: var(--surface); border-radius: var(--r-lg);
+  padding: 26px 28px; box-shadow: 0 8px 40px rgba(0,0,0,.18);
+}
+.modal-header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 20px;
+}
+.modal-title { font-size: 16px; font-weight: 700; }
+
+/* 업로드 존 */
+.upload-zone {
+  border: 2px dashed var(--border2); border-radius: var(--r-lg);
+  padding: 40px 24px; text-align: center; cursor: pointer;
+  background: var(--s2); transition: all .15s;
+}
+.upload-zone:hover, .upload-zone.drag {
+  border-color: var(--blue); background: var(--blue-bg);
+}
+.upload-zone svg { width: 40px; height: 40px; color: var(--t3); margin-bottom: 12px; }
+.uz-t { font-size: 14px; font-weight: 600; margin-bottom: 4px; }
+.uz-s { font-size: 12px; color: var(--t3); }
+
+/* 분석 중 */
+.analyzing {
+  text-align: center; padding: 40px 20px;
+}
+.analyzing svg { width: 36px; height: 36px; color: var(--blue); margin-bottom: 12px; animation: spin 1s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.analyzing h3 { font-size: 14px; font-weight: 600; margin-bottom: 6px; }
+.analyzing p  { font-size: 12px; color: var(--t3); }
+
+/* B+A 필드 편집 */
+.field-editor-grid {
+  display: grid;
+  /* 키 | 표시명 | 타입 | 힌트·수식 | 자동채움 | 삭제 */
+  grid-template-columns: 1fr 1fr 90px 1fr 64px auto;
+  gap: 6px; margin-bottom: 6px; align-items: center;
+}
+.field-editor-grid input,
+.field-editor-grid select { font-size: 12px; padding: 6px 9px; }
+
+/* 설정 모달 탭 */
+.stab-row { display: flex; gap: 4px; margin-bottom: 18px; border-bottom: 1px solid var(--border); padding-bottom: 0; }
+.s-stab {
+  padding: 8px 16px; font-size: 12px; font-weight: 600; cursor: pointer;
+  color: var(--t2); border-bottom: 2px solid transparent; margin-bottom: -1px;
+  transition: color .12s;
+}
+.s-stab:hover { color: var(--text); }
+.s-stab.on { color: var(--blue-t); border-bottom-color: var(--blue); }
+.s-stab-pane { display: none; }
+.s-stab-pane.on { display: block; }
+
+.stab {
+  padding: 8px 16px; font-size: 12px; font-weight: 600; cursor: pointer;
+  color: var(--t2); border-bottom: 2px solid transparent; margin-bottom: -1px;
+  transition: color .12s;
+}
+.stab:hover { color: var(--text); }
+.stab.on { color: var(--blue-t); border-bottom-color: var(--blue); }
+.stab-pane { display: none; }
+.stab-pane.on { display: block; }
+.setting-row {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 9px 0; border-bottom: 1px solid var(--border);
+}
+.setting-row:last-child { border-bottom: none; }
+.setting-row label { font-size: 12px; font-weight: 600; min-width: 120px; }
+.setting-row input, .setting-row select { width: 240px; }
+.center-mgr-row {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 9px 0; border-bottom: 1px solid var(--border);
+}
+.center-mgr-row:last-child { border-bottom: none; }
+
+/* 자동입력 섹션 */
+.autofill-section {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  margin-bottom: 10px;
+  overflow: hidden;
+}
+.autofill-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 14px; cursor: pointer;
+  background: linear-gradient(135deg, var(--blue-bg) 0%, var(--purple-bg) 100%);
+  user-select: none;
+  transition: opacity .12s;
+}
+.autofill-header:hover { opacity: .88; }
+.autofill-header-left { display: flex; align-items: center; gap: 7px; }
+.autofill-header-title { font-size: 12px; font-weight: 700; color: var(--blue-t); }
+.autofill-header-sub { font-size: 10px; color: var(--blue-t); opacity: .7; }
+.autofill-body { padding: 12px 14px; }
+.autofill-tabs {
+  display: flex; gap: 3px; margin-bottom: 10px;
+}
+.atab {
+  padding: 5px 13px; border-radius: var(--r-sm);
+  font-size: 11px; font-weight: 600; cursor: pointer;
+  border: 1px solid var(--border2); color: var(--t2);
+  background: var(--surface); transition: all .12s;
+}
+.atab:hover { background: var(--s2); }
+.atab.on { background: var(--blue-t); color: #fff; border-color: var(--blue-t); }
+.autofill-textarea {
+  width: 100%; min-height: 90px; max-height: 180px;
+  font-size: 12px; font-family: inherit; line-height: 1.65;
+  padding: 9px 11px; border: 1px solid var(--border2);
+  border-radius: var(--r-sm); background: var(--s2);
+  color: var(--text); resize: vertical; outline: none;
+  transition: border-color .12s;
+}
+.autofill-textarea:focus { border-color: var(--blue); background: var(--surface); }
+.img-drop-zone {
+  border: 2px dashed var(--border2); border-radius: var(--r-sm);
+  padding: 20px 14px; text-align: center; cursor: pointer;
+  background: var(--s2); transition: all .15s; position: relative;
+  min-height: 90px; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 6px;
+}
+.img-drop-zone:hover, .img-drop-zone.drag {
+  border-color: var(--blue); background: var(--blue-bg);
+}
+.img-drop-zone svg { width: 24px; height: 24px; color: var(--t3); }
+.img-drop-zone .idz-t { font-size: 12px; font-weight: 600; color: var(--t2); }
+.img-drop-zone .idz-s { font-size: 10px; color: var(--t3); }
+.img-preview-wrap { position: relative; margin-top: 8px; }
+.img-preview-wrap img {
+  max-width: 100%; max-height: 160px; border-radius: var(--r-sm);
+  border: 1px solid var(--border); display: block;
+}
+.img-preview-wrap .img-remove {
+  position: absolute; top: -6px; right: -6px;
+  width: 20px; height: 20px; border-radius: 50%;
+  background: var(--red-t); color: #fff;
+  font-size: 10px; font-weight: 700;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; border: 2px solid #fff;
+}
+.autofill-result {
+  margin-top: 8px; background: var(--green-bg);
+  border: 1px solid rgba(10,122,84,.2); border-radius: var(--r-sm);
+  padding: 8px 11px; font-size: 11px; line-height: 1.7; display: none;
+}
+.autofill-result-row { display: flex; gap: 6px; align-items: baseline; }
+.autofill-result-key { color: var(--t2); min-width: 80px; flex-shrink: 0; }
+.autofill-result-val { color: var(--green-t); font-weight: 600; }
+.autofill-result-skip { color: var(--t3); font-style: italic; }
+
+/* 가이드 탭 textarea */
+.guide-textarea {
+  width: 100%; min-height: 320px; font-size: 12px;
+  font-family: 'Malgun Gothic', -apple-system, sans-serif;
+  line-height: 1.7; padding: 12px 14px;
+  border: 1px solid var(--border2); border-radius: var(--r-sm);
+  background: var(--surface); color: var(--text);
+  resize: vertical; outline: none;
+}
+.guide-textarea:focus { border-color: var(--blue); }
+
+/* 텍스트 붙여넣기 영역 */
+.paste-zone {
+  width: 100%; min-height: 120px; font-size: 12px;
+  font-family: inherit; line-height: 1.7; padding: 12px 14px;
+  border: 2px dashed var(--border2); border-radius: var(--r-lg);
+  background: var(--s2); color: var(--text);
+  resize: vertical; outline: none; transition: border-color .15s;
+}
+.paste-zone:focus { border-color: var(--blue); background: var(--surface); }
+
+/* 미리보기 변경 하이라이트 */
+.changed {
+  background: #FFF3B0;
+  border-radius: 3px;
+  padding: 0 2px;
+  outline: 1.5px solid #E6C300;
+}
+.changed-label {
+  display: inline-block;
+  font-size: 9px; font-weight: 700;
+  background: #E6C300; color: #5A4A00;
+  border-radius: 3px; padding: 0 4px;
+  margin-left: 3px; vertical-align: middle;
+  line-height: 1.6;
+}
+
+/* 전역 토스트 */
+.g-toast {
+  position: fixed; bottom: 28px; left: 50%; transform: translateX(-50%);
+  background: #18181A; color: #fff;
+  font-size: 12px; font-weight: 600;
+  padding: 10px 22px; border-radius: var(--r);
+  z-index: 999; pointer-events: none;
+  opacity: 0; transition: opacity .2s;
+}
+.g-toast.show { opacity: 1; }
+
+/* 뱃지 */
+.badge {
+  display: inline-flex; align-items: center;
+  font-size: 10px; font-weight: 700;
+  padding: 3px 8px; border-radius: 10px;
+}
+.badge.blue   { background: var(--blue-bg); color: var(--blue-t); }
+.badge.green  { background: var(--green-bg); color: var(--green-t); }
+.badge.amber  { background: var(--amber-bg); color: var(--amber-t); }
+.badge.red    { background: var(--red-bg); color: var(--red-t); }
+
+/* 빈 목록 */
+.empty-msg { font-size: 11px; color: var(--t3); padding: 14px 4px; text-align: center; }
+
+/* 유틸 */
+.divider { height: 1px; background: var(--border); margin: 14px 0; }
+.flex { display: flex; }
+.items-center { align-items: center; }
+.gap6 { gap: 6px; } .gap8 { gap: 8px; } .gap12 { gap: 12px; }
+.ml-auto { margin-left: auto; }
+.mt8 { margin-top: 8px; } .mt12 { margin-top: 12px; } .mt16 { margin-top: 16px; }
+.fw6 { font-weight: 600; } .fw7 { font-weight: 700; }
+.fs11 { font-size: 11px; } .fs12 { font-size: 12px; }
+.tc2 { color: var(--t2); } .tc3 { color: var(--t3); }
 </style>
 </head>
 <body>
 
-<div id='sidebar'>
-  <div id='sidebar-header'>
-    <h1>📄 깡비서 문서뚝딱</h1>
-    <input id='search-box' type='text' placeholder='템플릿 검색...' oninput='renderSidebar()'>
-  </div>
-  <div id='tpl-list'></div>
-  <div id='sidebar-footer'>
-    <button class='btn-sm btn-new' onclick='openNewTplModal()'>＋ 새 템플릿</button>
-    <button class='btn-sm btn-cfg' onclick='openSettings()'>⚙</button>
-  </div>
-</div>
-
-<div id='main'>
-  <div id='main-header'>
-    <h2 id='main-title'>템플릿을 선택하세요</h2>
-    <span id='main-badge' class='badge' style='display:none'></span>
-    <button id='btn-move' class='btn-action btn-gray' style='display:none;font-size:11px;padding:4px 10px;' onclick='openMoveModal()'>📁 이동</button>
-  </div>
-  <div id='main-body'>
-    <div id='welcome'>
-      <div style='font-size:48px'>📋</div>
-      <h3>왼쪽 목록에서 템플릿을 클릭하거나</h3>
-      <p>상단 검색으로 빠르게 찾을 수 있습니다</p>
-    </div>
-    <div id='editor'>
-      <!-- 자료 자동입력 -->
-      <div class='section-card'>
-        <div class='section-card-header' onclick='toggleCard(this)'>
-          <h3>📥 자료에서 자동입력</h3><span>▼</span>
-        </div>
-        <div class='section-card-body'>
-          <div class='tab-bar'>
-            <button class='tab-btn active' onclick='switchTab(this,"tab-text")'>텍스트</button>
-            <button class='tab-btn' onclick='switchTab(this,"tab-img")'>이미지</button>
-          </div>
-          <div id='tab-text' class='tab-panel active'>
-            <textarea class='input-area' id='auto-text' placeholder='텍스트 또는 표 내용을 붙여넣으세요. AI가 자동 분석합니다.'></textarea>
-            <button class='btn-analyze' onclick='analyzeText()'>🔍 AI 분석 → 자동입력</button>
-          </div>
-          <div id='tab-img' class='tab-panel'>
-            <div id='img-drop-zone' style='border:2px dashed #cbd5e1;border-radius:8px;padding:24px;text-align:center;color:#94a3b8;cursor:pointer;'
-              ondragover='event.preventDefault()' ondrop='handleImageDrop(event)' onclick='document.getElementById("img-input").click()'>
-              📷 이미지 드래그, 클릭, 또는 Ctrl+V<br><small>캡처 이미지·사진을 붙여넣으면 AI가 수치를 읽어냅니다</small>
-              <input id='img-input' type='file' accept='image/*' style='display:none' onchange='handleImageFile(this)'>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- 변동 항목 -->
-      <div class='section-card'>
-        <div class='section-card-header' onclick='toggleCard(this)'>
-          <h3>✏️ 변동 항목 입력</h3><span>▼</span>
-        </div>
-        <div class='section-card-body'>
-          <div id='fields-container' class='fields-grid'></div>
-        </div>
-      </div>
-
-      <!-- AI 분석 -->
-      <div class='section-card'>
-        <div class='section-card-header' onclick='toggleCard(this)'>
-          <h3>🤖 AI 전월대비 분석</h3><span>▼</span>
-        </div>
-        <div class='section-card-body'>
-          <div id='ai-analysis-box' class='ai-analysis-box' style='min-height:50px;'>(초안 생성 후 AI 분석이 여기 표시됩니다)</div>
-          <button class='btn-analyze' style='margin-top:8px;' onclick='generateAIAnalysis()'>📊 전월대비 분석 생성</button>
-        </div>
-      </div>
-
-      <!-- 미리보기 -->
-      <div class='section-card'>
-        <div class='section-card-header' onclick='toggleCard(this)'>
-          <h3>👁 미리보기</h3><span>▼</span>
-        </div>
-        <div class='section-card-body'>
-          <div id='preview-box' class='preview-box'></div>
-        </div>
-      </div>
-
-      <!-- 액션 -->
-      <div class='section-card'>
-        <div class='action-bar'>
-          <button class='btn-action btn-primary' onclick='generateDraft()'>✨ 초안 생성</button>
-          <button class='btn-action btn-success' onclick='copyTitle()'>📋 제목 복사</button>
-          <button class='btn-action btn-success' onclick='copyBody()'>📄 본문 복사 (표 포함)</button>
-          <button class='btn-action btn-warn' onclick='saveHistory()'>💾 이력 저장</button>
-          <button class='btn-action btn-gray' onclick='openMoveModal()'>📁 이동</button>
-          <button class='btn-action btn-danger' onclick='confirmDeleteCurrentTpl()'>🗑 템플릿 삭제</button>
-        </div>
-      </div>
+<!-- ══ 상단바 ══ -->
+<header class="topbar">
+  <div class="topbar-logo">깡비서 문서뚝딱 📄</div>
+  <nav class="center-tabs" id="centerTabs"></nav>
+  <!-- 센터 추가 버튼 (탭 바로 옆) -->
+  <div id="centerAddWrap" style="display:flex;align-items:center;flex-shrink:0;margin-left:4px;">
+    <button onclick="showCenterAddInline()" title="센터 추가"
+      style="display:flex;align-items:center;gap:4px;padding:5px 10px;border-radius:var(--r-sm);
+        border:1px dashed var(--border2);background:transparent;color:var(--t3);
+        font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap;transition:all .12s;"
+      onmouseover="this.style.color='var(--blue-t)';this.style.borderColor='var(--blue)'"
+      onmouseout="this.style.color='var(--t3)';this.style.borderColor='var(--border2)'">
+      <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"
+        style="width:11px;height:11px;"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      센터
+    </button>
+    <!-- 인라인 입력창 (숨겨진 상태로 시작) -->
+    <div id="centerAddInline" style="display:none;align-items:center;gap:5px;
+      background:var(--surface);border:1px solid var(--blue);border-radius:var(--r-sm);
+      padding:3px 6px;margin-left:4px;">
+      <input type="color" id="newCenterColorTop" value="#1860C4"
+        style="width:22px;height:22px;border:none;border-radius:3px;cursor:pointer;padding:0;background:none;flex-shrink:0;">
+      <input type="text" id="newCenterNameTop" placeholder="센터명"
+        style="width:90px;border:none;outline:none;font-size:12px;font-family:inherit;background:transparent;color:var(--text);"
+        onkeydown="if(event.key==='Enter')confirmCenterAdd();if(event.key==='Escape')cancelCenterAdd();">
+      <button onclick="confirmCenterAdd()"
+        style="padding:3px 8px;border-radius:var(--r-sm);border:none;background:var(--blue-t);color:#fff;
+          font-size:11px;font-weight:600;cursor:pointer;">추가</button>
+      <button onclick="cancelCenterAdd()"
+        style="padding:3px 6px;border-radius:var(--r-sm);border:1px solid var(--border2);background:transparent;
+          color:var(--t2);font-size:11px;cursor:pointer;">✕</button>
     </div>
   </div>
-</div>
-
-<!-- ===== MODALS ===== -->
-
-<!-- 새 템플릿 등록 -->
-<div id='modal-new' class='modal-overlay'>
-  <div class='modal modal-lg'>
-    <div class='modal-header'>
-      <h3>새 템플릿 등록</h3>
-      <button class='modal-close' onclick='closeModal("modal-new")'>✕</button>
+  <!-- 센터 수정 미니모달 -->
+  <div id="centerEditPopup" style="display:none;position:fixed;top:58px;left:50%;transform:translateX(-50%);
+    background:var(--surface);border:1px solid var(--border2);border-radius:var(--r-lg);
+    padding:18px 20px;z-index:300;box-shadow:0 8px 32px rgba(0,0,0,.18);min-width:320px;">
+    <div style="font-size:13px;font-weight:700;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between;">
+      센터 수정
+      <button class="btn sm" onclick="closeCenterEdit()">✕</button>
     </div>
-    <div class='modal-body'>
-      <div class='tab-bar' style='padding:0;'>
-        <button class='tab-btn active' onclick='switchTab(this,"new-tab-mht")'>MHT 업로드</button>
-        <button class='tab-btn' onclick='switchTab(this,"new-tab-paste")'>텍스트 붙여넣기</button>
-        <button class='tab-btn' onclick='switchTab(this,"new-tab-direct")'>직접 입력</button>
+    <div class="fg">
+      <div class="flabel">센터명</div>
+      <input type="text" id="cedit_name" style="margin-bottom:8px;">
+    </div>
+    <div class="fg" style="display:flex;gap:8px;align-items:center;">
+      <div style="flex:1;">
+        <div class="flabel">색상</div>
+        <input type="color" id="cedit_color" style="width:100%;height:34px;border:1px solid var(--border2);border-radius:var(--r-sm);cursor:pointer;padding:2px;">
       </div>
-      <div id='new-tab-mht' class='tab-panel active'>
-        <div class='warn-text'>기존 결재문서를 업로드하면 AI가 자동 분석합니다</div>
-        <div style='border:2px dashed #cbd5e1;border-radius:8px;padding:24px;text-align:center;color:#94a3b8;cursor:pointer;' onclick='document.getElementById("mht-input").click()'>
-          📂 MHT 파일 드래그 또는 클릭
-          <input id='mht-input' type='file' accept='.mht,.mhtml' style='display:none' onchange='handleMHTFile(this)'>
+    </div>
+    <div class="divider"></div>
+    <div class="fg"><div class="flabel">담당자</div><input type="text" id="cedit_contact" placeholder="미입력 시 공통값"></div>
+    <div class="fg"><div class="flabel">예금주</div><input type="text" id="cedit_depositor" placeholder="미입력 시 공통값"></div>
+    <div class="fg"><div class="flabel">은행명</div><input type="text" id="cedit_bank" placeholder="미입력 시 공통값"></div>
+    <div class="fg"><div class="flabel">계좌번호</div><input type="text" id="cedit_account" placeholder="미입력 시 공통값"></div>
+    <input type="hidden" id="cedit_id">
+    <div style="display:flex;gap:8px;margin-top:14px;justify-content:flex-end;">
+      <button class="btn danger sm" onclick="delCenterFromEdit()">센터 삭제</button>
+      <button class="btn solid" onclick="saveCenterEdit()">저장</button>
+    </div>
+  </div>
+  <div class="topbar-right">
+    <div class="search-wrap">
+      <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+        <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+      </svg>
+      <input type="text" id="searchInput" placeholder="문서 검색..." oninput="onSearch(this.value)">
+    </div>
+    <button class="btn solid sm" onclick="openTplModal()">
+      <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+        <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+      </svg>새 템플릿
+    </button>
+    <button class="btn-icon" onclick="openSettings()" title="설정">
+      <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8">
+        <circle cx="12" cy="12" r="3"/>
+        <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/>
+      </svg>
+    </button>
+  </div>
+</header>
+
+<!-- ══ 메인 레이아웃 ══ -->
+<div class="layout">
+
+  <!-- 좌측 패널 -->
+  <aside class="left-panel">
+    <!-- 템플릿 목록 -->
+    <div class="lp-section tpl-sec">
+      <div class="lp-header">
+        <span class="lp-title">템플릿</span>
+        <span class="fs11 tc3" id="tplCount">0개</span>
+      </div>
+      <div class="lp-list" id="tplList"></div>
+    </div>
+    <!-- 생성 이력 -->
+    <div class="lp-section hist-sec">
+      <div class="lp-header">
+        <span class="lp-title">생성 이력</span>
+        <span class="badge blue" id="histBadge" style="display:none">0</span>
+      </div>
+      <!-- 이력 검색 + 센터 필터 -->
+      <div style="padding:0 8px 6px;display:flex;gap:5px;">
+        <div style="flex:1;display:flex;align-items:center;gap:5px;padding:5px 9px;
+          background:var(--s2);border:1px solid var(--border);border-radius:var(--r-sm);">
+          <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"
+            style="width:11px;height:11px;color:var(--t3);flex-shrink:0;">
+            <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+          </svg>
+          <input type="text" id="histSearchInput" placeholder="이력 검색..."
+            oninput="filterHistList(this.value)"
+            style="border:none;outline:none;background:transparent;
+              font-size:11px;font-family:inherit;width:100%;color:var(--text);">
         </div>
-        <div id='mht-analyze-result' style='display:none;margin-top:12px;'></div>
+        <select id="histCenterFilter" onchange="filterHistList(document.getElementById('histSearchInput').value)"
+          style="font-size:11px;padding:4px 6px;border:1px solid var(--border);
+            border-radius:var(--r-sm);background:var(--s2);color:var(--text);
+            max-width:72px;cursor:pointer;">
+          <option value="">전체</option>
+        </select>
       </div>
-      <div id='new-tab-paste' class='tab-panel'>
-        <div class='warn-text'>기존 결재문서를 전체 선택(Ctrl+A) → 복사(Ctrl+C) 후 아래에 붙여넣으세요</div>
-        <textarea class='input-area' id='paste-text' style='min-height:120px;' placeholder='문서 내용을 붙여넣으세요...'></textarea>
-        <button class='btn-analyze' onclick='analyzePasteText()'>🔍 AI 분석 시작</button>
-        <div id='paste-analyze-result' style='display:none;margin-top:12px;'></div>
+      <div class="lp-list" id="histList"></div>
+    </div>
+  </aside>
+
+  <!-- 우측 작업 영역 -->
+  <section class="work-area" id="workArea">
+    <!-- 빈 상태 -->
+    <div class="blank-state" id="blankState">
+      <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.2">
+        <path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+      </svg>
+      <h3>작성할 문서를 선택하세요</h3>
+      <p>왼쪽 목록에서 템플릿을 클릭하거나<br>상단 검색으로 빠르게 찾을 수 있습니다</p>
+    </div>
+
+    <!-- 작업 화면 (선택 후) -->
+    <div id="workScreen" style="display:none; flex-direction:column; height:100%;">
+      <!-- 작업 헤더 -->
+      <div class="work-header">
+        <div class="work-header-left">
+          <div>
+            <div class="work-doc-title" id="wDocTitle"></div>
+            <div class="work-doc-sub" id="wDocSub"></div>
+          </div>
+          <span class="badge blue" id="wCenterBadge"></span>
+          <span class="tpl-dday" id="wDday" style="display:none"></span>
+        </div>
+        <div class="flex gap8 items-center">
+          <button class="btn sm" id="editTplBtn" onclick="editCurrentTpl()">
+            <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" style="width:12px;height:12px;">
+              <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/>
+              <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>
+            </svg>템플릿 수정
+          </button>
+        </div>
       </div>
-      <div id='new-tab-direct' class='tab-panel'>
-        <div id='direct-form'>
-          <div class='form-row'>
-            <label>문서명 *</label>
-            <input id='new-name' type='text' placeholder='예: KB손보부천 도급비 청구'>
+
+      <!-- 입력 + 미리보기 -->
+      <div class="work-body" id="workBody">
+        <!-- 입력 패널 -->
+        <div class="input-panel">
+          <!-- 이력 자동반영 안내 -->
+          <div id="histAutofillBanner" style="display:none;align-items:center;gap:7px;
+            background:var(--blue-bg);border:1px solid rgba(24,96,196,.2);
+            border-radius:var(--r-sm);padding:8px 11px;margin-bottom:8px;
+            font-size:11px;color:var(--blue-t);line-height:1.5;"></div>
+
+          <!-- 이상값 경고 -->
+          <div class="warn-banner" id="warnBanner">
+            <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+            </svg>
+            <p id="warnText"></p>
           </div>
-          <div class='form-row'>
-            <label>센터</label>
-            <select id='new-center'></select>
-          </div>
-          <div class='form-row'>
-            <label>마감일 (D-day 알림)</label>
-            <input id='new-deadline' type='date'>
-          </div>
-          <div class='form-row'>
-            <label>제목 템플릿</label>
-            <input id='new-title-tpl' type='text' placeholder='예: KB손해보험 제휴CS사업({{센터명}}) {{청구연월}} 도급비 청구'>
-          </div>
-          <div style='margin-bottom:8px;'>
-            <label style='font-size:11px;font-weight:600;color:#374151;'>변동 필드</label>
-            <div id='new-fields-editor' style='margin-top:6px;'>
-              <div style='display:grid;grid-template-columns:1fr 1fr 90px 1fr 60px 60px 30px;gap:6px;margin-bottom:4px;'>
-                <span style='font-size:10px;color:#94a3b8;'>필드키</span>
-                <span style='font-size:10px;color:#94a3b8;'>표시명</span>
-                <span style='font-size:10px;color:#94a3b8;'>타입</span>
-                <span style='font-size:10px;color:#94a3b8;'>힌트/수식</span>
-                <span style='font-size:10px;color:#94a3b8;'>자동채움</span>
-                <span style='font-size:10px;color:#94a3b8;'>월자동</span>
-                <span></span>
+
+          <!-- 자료에서 자동입력 -->
+          <div class="autofill-section" id="autofillSection" style="display:none;">
+            <div class="autofill-header" onclick="toggleAutofill()">
+              <div class="autofill-header-left">
+                <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"
+                  style="width:14px;height:14px;color:var(--blue-t);">
+                  <path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
+                </svg>
+                <span class="autofill-header-title">자료에서 자동입력</span>
+                <span class="autofill-header-sub">텍스트 또는 이미지 붙여넣기 → AI 자동 분석</span>
               </div>
-              <div id='new-fields-rows'></div>
+              <svg id="autofillChevron" fill="none" viewBox="0 0 24 24" stroke="currentColor"
+                stroke-width="2.5" style="width:14px;height:14px;color:var(--blue-t);transition:transform .2s;">
+                <polyline points="6 9 12 15 18 9"/>
+              </svg>
             </div>
-            <button type='button' onclick='addFieldRow("new-fields-rows")' style='margin-top:4px;padding:4px 10px;background:#e2e8f0;border:none;border-radius:4px;cursor:pointer;font-size:11px;'>+ 필드 추가</button>
+            <div class="autofill-body" id="autofillBody">
+              <!-- 탭: 텍스트 / 이미지 -->
+              <div class="autofill-tabs">
+                <div class="atab on" id="atab0" onclick="switchAtab(0)">텍스트</div>
+                <div class="atab"    id="atab1" onclick="switchAtab(1)">이미지</div>
+              </div>
+
+              <!-- 텍스트 탭 -->
+              <div id="aPane0">
+                <textarea class="autofill-textarea" id="autofillText"
+                  placeholder="자료 텍스트를 복사해서 붙여넣으세요.&#10;예) 5월 청구인원: 62명, 공급가액: 236,387,218원 등"
+                  onpaste="setTimeout(()=>onAutofillTextPaste(),50)"></textarea>
+              </div>
+
+              <!-- 이미지 탭 -->
+              <div id="aPane1" style="display:none;">
+                <div class="img-drop-zone" id="imgDropZone"
+                  onclick="document.getElementById('imgFileInput').click()"
+                  ondragover="event.preventDefault();this.classList.add('drag')"
+                  ondragleave="this.classList.remove('drag')"
+                  ondrop="event.preventDefault();this.classList.remove('drag');handleImgDrop(event)"
+                  onpaste="handleImgPaste(event)">
+                  <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+                    <path d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                  </svg>
+                  <div class="idz-t">이미지 드래그, 클릭, 또는 Ctrl+V</div>
+                  <div class="idz-s">캡처 이미지·사진을 붙여넣으면 AI가 수치를 읽어냅니다</div>
+                  <input type="file" id="imgFileInput" accept="image/*" style="display:none"
+                    onchange="handleImgFile(this.files[0])">
+                </div>
+                <div class="img-preview-wrap" id="imgPreviewWrap" style="display:none;">
+                  <img id="imgPreview" src="" alt="미리보기">
+                  <div class="img-remove" onclick="clearImg()">✕</div>
+                </div>
+              </div>
+
+              <!-- 분석 버튼 -->
+              <div style="display:flex;gap:8px;margin-top:10px;align-items:center;">
+                <button class="btn solid sm" id="autofillBtn" onclick="runAutofill()"
+                  style="flex:1;justify-content:center;">
+                  <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"
+                    style="width:12px;height:12px;">
+                    <path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
+                  </svg>
+                  AI 분석 → 자동입력
+                </button>
+                <label style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--t2);cursor:pointer;white-space:nowrap;">
+                  <input type="checkbox" id="overwriteCheck" style="width:13px;height:13px;">
+                  기존값 덮어쓰기
+                </label>
+              </div>
+
+              <!-- 분석 결과 미리보기 -->
+              <div class="autofill-result" id="autofillResult"></div>
+            </div>
           </div>
-          <div class='form-row'>
-            <label>본문 템플릿</label>
-            <small style='color:#94a3b8;font-size:10px;'>변동 필드: {{필드키}} / 표: [TABLE:이름] 헤더|컬럼 행 [/TABLE] / AI분석: [AI_ANALYSIS] / 청구기간: {{_청구기간시작}}~{{_청구기간종료}}</small>
-            <textarea id='new-body-tpl' style='min-height:200px;' class='input-area' placeholder='본문 내용을 작성하세요...'></textarea>
+
+          <!-- 변동 항목 -->
+          <div class="input-section">
+            <div class="isec-title">
+              <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" style="width:13px;height:13px;">
+                <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+              </svg>
+              변동 항목 입력
+            </div>
+            <div id="dynFields"></div>
+          </div>
+
+          <!-- AI 전월대비 분석 -->
+          <div class="ai-section" id="aiSection" style="display:none;">
+            <div class="ai-sec-top">
+              <div class="ai-sec-label">
+                <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" style="width:13px;height:13px;">
+                  <path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
+                </svg>
+                AI 전월대비 분석
+              </div>
+              <button class="btn sm" id="aiBtn" onclick="genAI()">초안 생성</button>
+            </div>
+            <div id="aiDraft" class="ai-editable" contenteditable="true">
+              숫자를 입력한 뒤 초안 생성을 누르세요.
+            </div>
+          </div>
+
+          <!-- 추가 입력 -->
+          <div class="extra-section">
+            <div class="flabel">
+              추가 입력
+              <span class="fs11 tc3" style="font-weight:400;">(선택 · 이번 문서에만)</span>
+            </div>
+            <textarea id="extraInput" placeholder="템플릿 외 추가 내용 자유 입력..."></textarea>
+          </div>
+        </div>
+
+        <!-- 미리보기 패널 -->
+        <div class="preview-panel">
+          <div class="preview-title-bar">
+            <span class="preview-label">미리보기</span>
+            <span class="fs11 tc3" id="previewMeta"></span>
+          </div>
+          <div class="preview-overflow">
+            <div class="doc-wrap" id="previewDoc"></div>
           </div>
         </div>
       </div>
+
+      <!-- 복사 바 -->
+      <div class="copy-bar">
+        <button class="btn solid" onclick="cpTitle()">
+          <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <rect x="9" y="9" width="13" height="13" rx="2"/>
+            <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/>
+          </svg>제목 복사
+        </button>
+        <button class="btn solid" onclick="cpBody()">
+          <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <rect x="9" y="9" width="13" height="13" rx="2"/>
+            <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/>
+          </svg>본문 복사 (표 포함)
+        </button>
+        <button class="btn green" onclick="saveHist()">
+          <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/>
+            <polyline points="17 21 17 13 7 13 7 21"/>
+          </svg>이력 저장
+        </button>
+        <span class="toast" id="cpToast"></span>
+      </div>
     </div>
-    <div class='modal-footer'>
-      <button class='btn-action btn-gray' onclick='closeModal("modal-new")'>취소</button>
-      <button class='btn-action btn-primary' onclick='saveNewTemplate()'>저장</button>
+  </section>
+</div>
+
+<!-- ══ 전역 토스트 ══ -->
+<div class="g-toast" id="gToast"></div>
+
+<!-- ══ 템플릿 등록/수정 모달 ══ -->
+<div class="modal-bg" id="tplModal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title" id="tplModalTitle">새 템플릿 등록</div>
+      <button class="btn sm" onclick="closeTplModal()">✕ 닫기</button>
+    </div>
+
+    <!-- STEP 1: 업로드 선택 -->
+    <div id="mStep1">
+      <!-- 등록 방식 탭 -->
+      <div style="display:flex;gap:4px;margin-bottom:14px;border-bottom:1px solid var(--border);padding-bottom:0;">
+        <div class="stab on" id="regTab0" onclick="switchRegTab(0)" style="font-size:12px;">MHT 파일 업로드</div>
+        <div class="stab"    id="regTab1" onclick="switchRegTab(1)" style="font-size:12px;">텍스트 붙여넣기</div>
+        <div class="stab"    id="regTab2" onclick="switchRegTab(2)" style="font-size:12px;">직접 입력</div>
+      </div>
+
+      <!-- 방식 A: MHT 업로드 -->
+      <div id="regPane0">
+        <div class="upload-zone" id="uploadZone"
+          onclick="document.getElementById('mhtInput').click()"
+          ondragover="event.preventDefault();this.classList.add('drag')"
+          ondragleave="this.classList.remove('drag')"
+          ondrop="event.preventDefault();this.classList.remove('drag');handleMHT(event.dataTransfer.files[0])">
+          <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+            <path d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z"/>
+          </svg>
+          <div class="uz-t">MHT 파일 드래그 또는 클릭</div>
+          <div class="uz-s">기존 결재문서를 업로드하면 AI가 자동 분석합니다</div>
+          <input type="file" id="mhtInput" accept=".mht,.mhtml" style="display:none"
+            onchange="handleMHT(this.files[0])">
+        </div>
+      </div>
+
+      <!-- 방식 B: 텍스트 붙여넣기 -->
+      <div id="regPane1" style="display:none;">
+        <div style="font-size:12px;color:var(--t2);margin-bottom:10px;line-height:1.7;">
+          기존 결재문서를 <strong>전체 선택(Ctrl+A) → 복사(Ctrl+C)</strong> 후 아래에 붙여넣으세요.<br>
+          AI가 변동 항목을 자동으로 분석합니다.
+        </div>
+        <textarea class="paste-zone" id="pasteText"
+          placeholder="여기에 문서 내용을 붙여넣으세요..."></textarea>
+        <div style="margin-top:10px;text-align:right;">
+          <button class="btn solid" onclick="handlePaste()">
+            <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" style="width:13px;height:13px;">
+              <path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
+            </svg>
+            AI 분석 시작
+          </button>
+        </div>
+      </div>
+
+      <!-- 방식 C: 직접 입력 -->
+      <div id="regPane2" style="display:none;">
+        <div style="font-size:12px;color:var(--t2);margin-bottom:12px;">
+          문서명, 필드, 본문 템플릿을 직접 입력해서 등록합니다.
+        </div>
+        <button class="btn" onclick="showStep3Direct()" style="width:100%;justify-content:center;">
+          직접 입력 화면으로 →
+        </button>
+      </div>
+    </div>
+
+    <!-- STEP 2: AI 분석 중 -->
+    <div id="mStep2" style="display:none;" class="analyzing">
+      <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+        <path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+      </svg>
+      <h3>AI가 문서를 분석하고 있습니다</h3>
+      <p>변동 필드와 자동계산 항목을 자동으로 감지합니다</p>
+    </div>
+
+    <!-- STEP 3: 확인 및 수정 (B+A) -->
+    <div id="mStep3" style="display:none;">
+      <div style="background:var(--green-bg);border-radius:var(--r-sm);padding:9px 13px;margin-bottom:16px;font-size:12px;color:var(--green-t);font-weight:600;">
+        ✓ AI 분석 완료 — 아래 내용을 확인·수정 후 저장하세요
+      </div>
+      <!-- 기본 정보 -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
+        <div class="fg">
+          <div class="flabel">문서명 *</div>
+          <input type="text" id="m_name" placeholder="예: 위탁수수료 청구">
+        </div>
+        <div class="fg">
+          <div class="flabel">센터 *</div>
+          <select id="m_center"></select>
+        </div>
+        <div class="fg">
+          <div class="flabel">마감일 (D-day 알림)</div>
+          <input type="text" id="m_deadline" placeholder="예: 매월 21일">
+        </div>
+        <div class="fg">
+          <div class="flabel">제목 템플릿</div>
+          <input type="text" id="m_titleTpl" placeholder="예: 케이뱅크 위탁수수료 청구({{청구연월}})" oninput="detectBodyVars()">
+        </div>
+      </div>
+      <div class="divider"></div>
+
+      <!-- 변동 필드 (B+A: AI감지 결과 + 직접 수정) -->
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+        <div class="fs12 fw7">변동 필드</div>
+        <div class="flex gap6 items-center">
+          <span class="fs11 tc3">자동계산 수식: 필드키 사용 (예: 당월공급가액*0.1)</span>
+        </div>
+      </div>
+      <!-- 컬럼 헤더 -->
+      <div class="field-editor-grid" style="margin-bottom:4px;">
+        <span class="fs11 tc3">필드 키</span>
+        <span class="fs11 tc3">표시명</span>
+        <span class="fs11 tc3">타입</span>
+        <span class="fs11 tc3">힌트 / 수식</span>
+        <span class="fs11 tc3" style="text-align:center;">자동채움</span>
+        <span></span>
+      </div>
+      <div id="m_fieldList" style="margin-bottom:8px;max-height:240px;overflow-y:auto;"></div>
+      <button class="btn sm" onclick="addMField()" style="margin-bottom:16px;">+ 필드 추가</button>
+      <div class="divider"></div>
+
+      <!-- 본문 템플릿 -->
+      <div class="fs12 fw7" style="margin-bottom:6px;">본문 템플릿</div>
+      <div class="fs11 tc3" style="margin-bottom:8px;line-height:1.7;">
+        변동 필드: <code style="background:var(--s2);padding:1px 5px;border-radius:3px;">{{필드키}}</code> &nbsp;
+        표: <code style="background:var(--s2);padding:1px 5px;border-radius:3px;">[TABLE:이름] 헤더|컬럼 행 [/TABLE]</code> &nbsp;
+        AI분석 위치: <code style="background:var(--s2);padding:1px 5px;border-radius:3px;">[AI_ANALYSIS]</code>
+      </div>
+      <textarea id="m_body" style="min-height:180px;font-size:12px;font-family:monospace;" oninput="detectBodyVars()"></textarea>
+      <!-- 감지된 {{변수}} → 클릭으로 필드 자동추가 -->
+      <div id="bodyVarPanel" style="display:none;margin-top:8px;">
+        <div style="font-size:11px;font-weight:600;color:var(--t2);margin-bottom:6px;display:flex;align-items:center;gap:6px;">
+          본문에서 감지된 변수 — 클릭하면 필드 자동 추가 / 초록색은 이미 등록됨
+        </div>
+        <div id="bodyVarList" style="display:flex;flex-wrap:wrap;gap:5px;"></div>
+      </div>
+
+      <div style="display:flex;gap:8px;margin-top:16px;justify-content:flex-end;">
+        <button class="btn" onclick="closeTplModal()">취소</button>
+        <button class="btn solid" onclick="saveTpl()">저장</button>
+      </div>
     </div>
   </div>
 </div>
 
-<!-- 설정 -->
-<div id='modal-settings' class='modal-overlay'>
-  <div class='modal modal-lg'>
-    <div class='modal-header'>
-      <h3>⚙ 설정</h3>
-      <button class='modal-close' onclick='closeModal("modal-settings")'>✕</button>
+<!-- ══ 설정 모달 ══ -->
+<div class="modal-bg" id="settingsModal">
+  <div class="modal" style="max-width:580px;">
+    <div class="modal-header">
+      <div class="modal-title">설정</div>
+      <button class="btn sm" onclick="closeSettings()">✕ 닫기</button>
     </div>
-    <div class='modal-body' style='padding:0;'>
-      <div class='settings-tabs'>
-        <button class='stab active' onclick='switchStab(this,"stab-style")'>출력 스타일</button>
-        <button class='stab' onclick='switchStab(this,"stab-centers")'>센터 관리</button>
-        <button class='stab' onclick='switchStab(this,"stab-guide")'>공통 가이드</button>
-        <button class='stab' onclick='switchStab(this,"stab-backup")'>백업/복원</button>
-      </div>
-      <!-- 출력 스타일 -->
-      <div id='stab-style' class='stab-panel active' style='padding:16px;'>
-        <div class='form-row'><label>폰트</label>
-          <select id='set-font'>
-            <option value='맑은 고딕'>맑은 고딕</option>
-            <option value='나눔고딕'>나눔고딕</option>
-            <option value='굴림'>굴림</option>
-          </select>
-        </div>
-        <div class='form-row'><label>본문 크기</label>
-          <select id='set-body-size'>
-            <option>8pt</option><option>9pt</option><option>10pt</option><option>11pt</option>
-            <option selected>12pt</option><option>13pt</option><option>14pt</option><option>15pt</option>
-          </select>
-        </div>
-        <div class='form-row'><label>표 글자 크기</label>
-          <select id='set-table-size'>
-            <option>8pt</option><option>9pt</option><option>10pt</option><option>11pt</option>
-            <option selected>12pt</option><option>13pt</option><option>14pt</option><option>15pt</option>
-          </select>
-        </div>
-        <div class='form-row'><label>줄간격</label>
-          <select id='set-line-height'>
-            <option>100%</option><option>110%</option><option>120%</option><option>130%</option><option>140%</option>
-            <option>150%</option><option>160%</option><option>170%</option><option>180%</option><option>190%</option>
-            <option selected>200%</option>
-          </select>
-        </div>
-        <div class='form-row'><label>표 테두리</label>
-          <select id='set-table-border'>
-            <option>0.5px (얇게)</option><option selected>1px (보통)</option>
-          </select>
-        </div>
-        <button class='btn-action btn-primary' onclick='saveSettings()'>저장</button>
-      </div>
-      <!-- 센터 관리 -->
-      <div id='stab-centers' class='stab-panel' style='padding:16px;'>
-        <div id='centers-list'></div>
-        <button class='btn-action btn-primary' onclick='addCenter()' style='margin-top:8px;'>+ 센터 추가</button>
-        <button class='btn-action btn-success' onclick='saveCenters()' style='margin-top:8px;'>저장</button>
-      </div>
-      <!-- 공통 가이드 -->
-      <div id='stab-guide' class='stab-panel' style='padding:16px;'>
-        <p style='font-size:11px;color:#64748b;margin-bottom:8px;'>AI가 문서를 생성할 때 항상 적용되는 공통 가이드입니다.</p>
-        <textarea id='guide-content' class='input-area' style='min-height:300px;font-size:11px;'></textarea>
-        <div style='display:flex;gap:8px;margin-top:8px;'>
-          <button class='btn-action btn-gray' onclick='resetGuide()'>기본값으로 초기화</button>
-          <button class='btn-action btn-primary' onclick='saveGuide()'>저장</button>
-        </div>
-        <div style='margin-top:16px;'>
-          <div style='font-size:12px;font-weight:700;margin-bottom:8px;'>수정 이력</div>
-          <div id='guide-history-list'></div>
-        </div>
-      </div>
-      <!-- 백업/복원 -->
-      <div id='stab-backup' class='stab-panel' style='padding:16px;'>
-        <div style='margin-bottom:16px;'>
-          <p style='font-size:12px;font-weight:700;margin-bottom:8px;'>📦 백업</p>
-          <div style='display:flex;gap:8px;'>
-            <button class='btn-action btn-gray' onclick='backupToClipboard()'>클립보드로 복사</button>
-            <button class='btn-action btn-gray' onclick='backupToJSON()'>JSON 파일로 저장</button>
-          </div>
-        </div>
-        <div>
-          <p style='font-size:12px;font-weight:700;margin-bottom:4px;'>⚠️ 복원 (현재 데이터 덮어씌워짐)</p>
-          <p style='font-size:11px;color:#94a3b8;margin-bottom:8px;'>※ 복원 전 반드시 백업하세요</p>
-          <div style='display:flex;gap:8px;'>
-            <button class='btn-action btn-gray' onclick='restoreFromClipboard()'>클립보드에서 불러오기</button>
-            <button class='btn-action btn-gray' onclick='document.getElementById("restore-file").click()'>JSON 파일 불러오기
-              <input id='restore-file' type='file' accept='.json' style='display:none' onchange='restoreFromFile(this)'>
-            </button>
-          </div>
-        </div>
-      </div>
+    <div class="stab-row">
+      <div class="s-stab on" onclick="switchStab(0)">출력 스타일</div>
+      <div class="s-stab"    onclick="switchStab(1)">센터 관리</div>
+      <div class="s-stab"    onclick="switchStab(2)">공통 가이드</div>
+      <div class="s-stab"    onclick="switchStab(3)">백업/복원</div>
     </div>
-  </div>
-</div>
-
-<!-- 이동 모달 -->
-<div id='modal-move' class='modal-overlay'>
-  <div class='modal' style='width:360px;'>
-    <div class='modal-header'>
-      <h3>📁 템플릿 이동</h3>
-      <button class='modal-close' onclick='closeModal("modal-move")'>✕</button>
+    <!-- 출력 스타일 -->
+    <div class="s-stab-pane on" id="spane0">
+      <div class="setting-row"><label>폰트</label>
+        <select id="c_font">
+          <option value="Malgun Gothic">맑은 고딕</option>
+          <option value="나눔고딕">나눔고딕</option>
+          <option value="굴림">굴림</option>
+        </select>
+      </div>
+      <div class="setting-row"><label>본문 크기</label>
+        <select id="c_fsize">
+          <option value="8pt">8pt</option>
+          <option value="9pt">9pt</option>
+          <option value="10pt">10pt</option>
+          <option value="11pt">11pt</option>
+          <option value="12pt" selected>12pt</option>
+          <option value="13pt">13pt</option>
+          <option value="14pt">14pt</option>
+          <option value="15pt">15pt</option>
+        </select>
+      </div>
+      <div class="setting-row"><label>표 글자 크기</label>
+        <select id="c_tfsize">
+          <option value="8pt">8pt</option>
+          <option value="9pt">9pt</option>
+          <option value="10pt">10pt</option>
+          <option value="11pt">11pt</option>
+          <option value="12pt" selected>12pt</option>
+          <option value="13pt">13pt</option>
+          <option value="14pt">14pt</option>
+          <option value="15pt">15pt</option>
+        </select>
+      </div>
+      <div class="setting-row"><label>줄간격</label>
+        <select id="c_lh">
+          <option value="100%">100%</option>
+          <option value="110%">110%</option>
+          <option value="120%">120%</option>
+          <option value="130%">130%</option>
+          <option value="140%">140%</option>
+          <option value="150%">150%</option>
+          <option value="160%">160%</option>
+          <option value="170%">170%</option>
+          <option value="180%">180%</option>
+          <option value="190%">190%</option>
+          <option value="200%" selected>200%</option>
+        </select>
+      </div>
+      <div class="setting-row"><label>표 테두리</label>
+        <select id="c_bpx">
+          <option value="0.5px" selected>0.5px (얇게)</option>
+          <option value="1px">1px (보통)</option>
+        </select>
+      </div>
+      <div class="mt16" style="text-align:right;"><button class="btn solid" onclick="saveCfg()">저장</button></div>
     </div>
-    <div class='modal-body'>
-      <div class='form-row'>
-        <label>이동할 위치 선택</label>
-        <select id='move-target'></select>
+    <!-- 센터 관리 -->
+    <div class="s-stab-pane" id="spane1">
+      <div id="centerMgrList"></div>
+      <div class="mt12" style="display:flex;align-items:center;gap:8px;">
+        <button class="btn sm" onclick="showCenterAddInModal()">+ 센터 추가</button>
+      </div>
+      <!-- 설정 모달 내 인라인 추가 영역 -->
+      <div id="centerAddModal" style="display:none;margin-top:10px;padding:12px 14px;
+        background:var(--blue-bg);border:1px solid rgba(24,96,196,.2);border-radius:var(--r);">
+        <div style="font-size:12px;font-weight:600;color:var(--blue-t);margin-bottom:10px;">새 센터 추가</div>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <input type="color" id="newCenterColorModal" value="#1860C4"
+            style="width:32px;height:32px;border:1px solid var(--border2);border-radius:var(--r-sm);cursor:pointer;padding:2px;flex-shrink:0;">
+          <input type="text" id="newCenterNameModal" placeholder="센터명 입력"
+            style="flex:1;padding:7px 10px;border:1px solid var(--blue);border-radius:var(--r-sm);
+              font-size:13px;font-family:inherit;outline:none;"
+            onkeydown="if(event.key==='Enter')confirmCenterAddModal();if(event.key==='Escape')cancelCenterAddModal();">
+          <button class="btn blue sm" onclick="confirmCenterAddModal()">추가</button>
+          <button class="btn sm" onclick="cancelCenterAddModal()">취소</button>
+        </div>
       </div>
     </div>
-    <div class='modal-footer'>
-      <button class='btn-action btn-gray' onclick='closeModal("modal-move")'>취소</button>
-      <button class='btn-action btn-primary' onclick='applyMove()'>이동</button>
+    <!-- 공통 가이드 -->
+    <div class="s-stab-pane" id="spane2">
+      <div style="font-size:12px;color:var(--t2);margin-bottom:10px;line-height:1.7;">
+        AI가 문서를 생성할 때 항상 적용되는 공통 가이드입니다.<br>
+        내용을 직접 수정하고 저장하면 이후 모든 AI 분석·초안 생성에 반영됩니다.
+      </div>
+      <textarea class="guide-textarea" id="c_guide"></textarea>
+      <div class="mt12" style="display:flex;gap:8px;justify-content:flex-end;align-items:center;">
+        <button class="btn sm" onclick="resetGuide()">기본값으로 초기화</button>
+        <button class="btn solid" onclick="saveGuide()">저장</button>
+      </div>
+    </div>
+    <!-- 백업/복원 -->
+    <div class="s-stab-pane" id="spane3">
+      <div style="font-size:12px;color:var(--t2);margin-bottom:16px;line-height:1.7;">
+        전체 데이터(템플릿·이력·센터·설정)를 백업하거나 복원합니다.
+      </div>
+      <div style="background:var(--s2);border-radius:var(--r);padding:14px 16px;margin-bottom:14px;">
+        <div style="font-size:12px;font-weight:700;margin-bottom:10px;">📦 백업</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button class="btn blue" onclick="backupClipboard()">클립보드로 복사</button>
+          <button class="btn blue" onclick="backupFile()">JSON 파일로 저장</button>
+        </div>
+      </div>
+      <div style="background:var(--red-bg);border:1px solid rgba(192,57,43,.15);border-radius:var(--r);padding:14px 16px;">
+        <div style="font-size:12px;font-weight:700;margin-bottom:4px;color:var(--red-t);">⚠️ 복원 (현재 데이터 덮어씌워짐)</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;margin-top:8px;">
+          <button class="btn" onclick="restoreClipboard()">클립보드에서 불러오기</button>
+          <button class="btn" onclick="document.getElementById('restoreFile').click()">
+            JSON 파일 불러오기
+          </button>
+          <input type="file" id="restoreFile" accept=".json" style="display:none"
+            onchange="restoreFromFile(this.files[0])">
+        </div>
+        <div style="font-size:11px;color:var(--t3);">※ 복원 전 반드시 백업하세요</div>
+      </div>
     </div>
   </div>
 </div>
 
 <script>
-// ============================================================
-// CONSTANTS & DEFAULTS
-// ============================================================
-const SK = {
-  tpl: 'kkangbi_tpl',
-  ctr: 'kkangbi_ctr',
-  set: 'kkangbi_set',
-  guide: 'kkangbi_guide',
-  ghist: 'kkangbi_ghist',
-  dhist: 'kkangbi_dhist'
-};
+// ══════════════════════════════════
+// 상태 (단일 S 객체)
+// ══════════════════════════════════
+let S = {
+  centers: [
+    { id:'c1', name:'케이뱅크',  color:'#1860C4' },
+    { id:'c2', name:'KB손보',    color:'#996600' },
+    { id:'c3', name:'LG전자',    color:'#0A7A54' },
+    { id:'c4', name:'비씨카드',  color:'#5B4FCF' },
+    { id:'c5', name:'농협은행',  color:'#C0392B' },
+    { id:'c6', name:'대신증권',  color:'#C0722B' },
+    { id:'c7', name:'스카이라이프', color:'#2B7DC0' },
+  ],
+  templates: [{
+    id:'t1', name:'위탁수수료 청구', centerId:'c1',
+    deadline:'매월 21일', deadlineDay:21, createdAt:'2026-06-01',
+    fields: [
+      { key:'청구연월',      label:'청구 연월',         type:'text',   placeholder:'예: 26년6월',                              autoFill:false },
+      { key:'청구기간',      label:'청구 기간',         type:'text',   placeholder:'예: 2026. 5. 1. ~ 2026. 5. 31.',            autoFill:false },
+      { key:'총인원',        label:'총 청구인원',       type:'text',   placeholder:'예: 62명',                                  autoFill:true  },
+      { key:'관리자',        label:'관리자 수',         type:'text',   placeholder:'예: 9명',                                   autoFill:true  },
+      { key:'상담사',        label:'상담사 수',         type:'text',   placeholder:'예: 47명',                                  autoFill:true  },
+      { key:'심야상담사',    label:'심야상담사 수',     type:'text',   placeholder:'예: 6명',                                   autoFill:true  },
+      { key:'전월공급가액',  label:'전월 공급가액',     type:'amount', placeholder:'숫자만 입력',                               autoFill:true  },
+      { key:'당월공급가액',  label:'당월 공급가액',     type:'amount', placeholder:'숫자만 입력',                               autoFill:false },
+      { key:'부가세',        label:'부가세',            type:'calc',   formula:'당월공급가액*0.1' },
+      { key:'청구총액',      label:'청구총액',          type:'calc',   formula:'당월공급가액+부가세' },
+      { key:'차액',          label:'차 액',             type:'calc',   formula:'당월공급가액-전월공급가액' },
+      { key:'변동사유',      label:'변동 사유',         type:'text',   placeholder:'예: 인력(+4명, +12백만) + 교육비(-2.4백만)', autoFill:false },
+      { key:'세금계산서일',  label:'세금계산서 발행일', type:'text',   placeholder:'예: 2026년 6월 25일',                       autoFill:false },
+    ],
+    titleTemplate: '케이뱅크 고객센터 위탁수수료 청구({{청구연월}})',
+    bodyTemplate:
+`  1. 관련
+      가. CB영업1부-128102-038418(2016.09.28) K뱅크 컨택센터 업무위탁 계약
+      나. AICC사업1팀-011104-24018798(2024.05.03) 2024년도 케이뱅크센터 위탁 운영 재계약 체결
 
-const DEFAULT_GUIDE = `당신은 KT IS 사내 공문서 작성 전문 어시스턴트입니다. 문서 작성 요청이 들어오면 아래 KT IS 공통 작성 가이드를 반드시 적용하세요.
+  2. 위 관련, 케이뱅크 고객센터 위탁운영비를 아래와 같이 청구하겠습니다.
+
+    ㅇ 청구기간 : {{청구기간}}
+    ㅇ 청구인원 : {{총인원}} (관리자 {{관리자}}, 상담사 {{상담사}}, 심야상담사 {{심야상담사}})
+    ㅇ 청구대상 : 주식회사 케이티
+    ㅇ 청구총액
+
+[TABLE:청구금액]
+구 분|공급가액|부가세|청구총액|비 고
+{{청구연월}} 도급비|{{당월공급가액}}|{{부가세}}|{{청구총액}}|
+[/TABLE]
+
+    ㅇ 계약 및 전월대비 비교
+
+[TABLE:전월비교]
+구 분|전월청구|당월청구|차 액|비 고
+공급가액|{{전월공급가액}}|{{당월공급가액}}|{{차액}}|{{변동사유}}
+[/TABLE]
+
+[AI_ANALYSIS]
+
+    ㅇ 은 행 명 : {{cfg_bank}}
+    ㅇ 계좌번호 : {{cfg_account}}
+    ㅇ 예 금 주 : {{cfg_depositor}}
+      - 세금계산서 발행일자 : {{세금계산서일}}
+      - 담 당 자 : {{cfg_contact}}
+
+  붙임  1. (ktis) 케이뱅크 위탁수수료 청구내역_{{붙임연월}}.  1부
+        2. 검수조서({{붙임연월}}).  끝.
+
+  수신처 : AICC지원파트, AICC기획팀`
+  }],
+  history: [],
+  cfg: {
+    writer:'강성호', dept:'AICC사업단 AICC사업1팀',
+    bank:'KEB하나은행', account:'149-890064-90704',
+    depositor:'(주)케이티아이에스',
+    contact:'케이티, 양희정PM / hee_jung.yang@kt.com',
+    font:'Malgun Gothic', fsize:'12pt', tfsize:'12pt', lh:'200%', bpx:'0.5px',
+    guide: `당신은 KTIS 사내 공문서 작성 전문 어시스턴트입니다.
+문서 작성 요청이 들어오면 아래 KTIS 공통 작성 가이드를 반드시 적용하세요.
 
 [공통 서식 기준]
-- 폰트: 맑은 고딕
-- 폰트 크기: 12pt (본문, 표 텍스트 모두 동일)
-- 줄간격: 200%
+- 폰트: 맑은 고딕 / 폰트 크기: 12p / 줄간격: 200%
 
 [1] 날짜 표기 규칙
-- 본문 날짜: 연월일 사이에 마침표(.)를 넣어 표기, 한 자리 숫자도 앞에 0 붙이지 않음
-  예) 2025.8.19.  /  2025.6.8.
-- 연도 축약 시: 작은따옴표(') 사용
-  예) '25년
+- 본문 날짜: 연월일 사이에 마침표(.) 표기, 한 자리 숫자도 앞에 0 붙이지 않음
+  예) 2025.8.19. / 2025.6.8.
+- 연도 축약 시: 작은따옴표(') 사용 예) '25년
 - 관련 문서 내 날짜: 전자결재 시스템 표기법 준수
 
 [2] 항목 기호 및 들여쓰기 규칙
-항목 기호 순서:
-  1단계: 1., 2., 3., …
-  2단계: 가., 나., 다., …
-  3단계: ○ 또는 1), 2), 3), …
-  4단계: - 또는 가), 나), 다), …
-  5단계: · 또는 (1), (2), (3), …
-  6단계: ·· 또는 (가), (나), (다), …
-들여쓰기:
-  - 1단계: 왼쪽 기본선에서 2칸 띄우고 시작
-  - 2단계 이상: 바로 위 항목 위치에서 오른쪽으로 2타씩 이동
+- 1단계: 1., 2., 3. / 2단계: 가., 나., 다. / 3단계: ○ 또는 1), 2), 3)
+- 4단계: - 또는 가), 나) / 5단계: · 또는 (1), (2) / 6단계: ·· 또는 (가), (나)
+- 들여쓰기: 1단계는 왼쪽 기본선에서 2칸, 이하 2타씩 이동
 
 [3] 관련 문서 작성 규칙
-- 형식: 문서번호(생산날짜) 제목 순으로 기재
+- 형식: 문서번호(생산날짜) 제목 순 기재
   예) 가. xxx팀-000000-12345678(2025.08.28) 제목
-- 제목은 생략·축약 금지, 두 줄 이상 시 항목 첫 글자에 맞춰 정렬
-- 관련성 높은 문서부터 순서대로 기재
+- 제목 생략·축약 금지, 두 줄 이상 시 항목 첫 글자에 맞춰 정렬
 
 [4] 붙임 자료 작성 규칙
-- 1개일 경우: 쌍점(:) 후 이어 쓰기
-  예) 붙임: 2025년 예산 편성(안) 1부.  끝.
-- 2개 이상일 경우: 항목 번호로 구분
-  예) 붙임  1. 관련문서 1부
-            2. 세부계획서 1부.  끝.
-- 본문과 붙임 내용이 상충할 경우 본문 우선
+- 1개: 붙임: 제목 1부.  끝.
+- 2개 이상: 붙임  1. 관련문서 1부 / 2. 세부계획서 1부.  끝.
 
 [5] 문서 마무리 규칙
 - 반드시 '끝.' 으로 마무리 (마지막 글자 뒤 2칸 띄우고 표기)
-- 본문 마지막: …바랍니다.  끝.
-- 붙임 마지막: …1부.  끝.
 - 표로 끝날 경우: 표 아래 왼쪽 한계선에서 2칸 띄우고 표기
 
 [6] 공통 주의사항
-- 제목 생략·축약 금지
-- 글자 크기·간격 임의 조정 금지
-- 마침표(.)는 마지막 항목 뒤에만 표기`;
-
-const DEFAULT_SETTINGS = {
-  font: '맑은 고딕',
-  bodySize: '12pt',
-  tableSize: '12pt',
-  lineHeight: '200%',
-  tableBorder: '1px (보통)'
+- 제목 생략·축약 금지 / 글자 크기·간격 임의 조정 금지
+- 마침표(.)는 마지막 항목 뒤에만 표기`
+  },
+  activeCenter: 'all',
+  curTplId: null,
+  curVals: {},
+  editMode: false   // 수정 모드 여부
 };
 
-// ============================================================
-// STATE
-// ============================================================
-let S = {
-  templates: [],
-  centers: [],
-  settings: { ...DEFAULT_SETTINGS },
-  guide: DEFAULT_GUIDE,
-  guideHistory: [],
-  docHistory: [],
-  currentTplId: null,
-  currentValues: {},
-  currentDraft: '',
-  currentTitle: ''
-};
+// ── 저장/불러오기 ──
+// ── Supabase 연동 — Vercel API 프록시 경유 (CORS 완전 해결) ──
+async function sbCall(method, table, query='', body=null) {
+  const r = await fetch('/api/supabase', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ method, table, query, body })
+  });
+  if (!r.ok) return method === 'GET' ? [] : null;
+  return r.json();
+}
+const sbGet    = (table, query='')         => sbCall('GET',    table, query);
+const sbPost   = (table, body)             => sbCall('POST',   table, '',    body);
+const sbPatch  = (table, query, body)      => sbCall('PATCH',  table, query, body);
+const sbDelete = (table, query)            => sbCall('DELETE', table, query);
 
-// ============================================================
-// STORAGE
-// ============================================================
-function loadAll() {
+// ── 로컬 저장 (즉시 반응용) + Supabase 백그라운드 동기화 ──
+function persist() {
+  localStorage.setItem('docapp3', JSON.stringify(S));
+  syncToSupabase(); // 백그라운드 동기화
+}
+function hydrate() {
+  const raw = localStorage.getItem('docapp3');
+  if (raw) { try { const p = JSON.parse(raw); Object.assign(S, p); } catch(e) {} }
+}
+
+// Supabase 초기 로드 (앱 시작 시 최신 데이터 불러오기)
+async function loadFromSupabase() {
   try {
-    const tpls = localStorage.getItem(SK.tpl);
-    if (tpls) S.templates = JSON.parse(tpls);
-    const ctrs = localStorage.getItem(SK.ctr);
-    if (ctrs) S.centers = JSON.parse(ctrs); else S.centers = [{ id: '__default__', name: '기본문서', managers: [] }];
-    const set = localStorage.getItem(SK.set);
-    if (set) S.settings = { ...DEFAULT_SETTINGS, ...JSON.parse(set) };
-    const g = localStorage.getItem(SK.guide);
-    if (g) S.guide = g;
-    const gh = localStorage.getItem(SK.ghist);
-    if (gh) S.guideHistory = JSON.parse(gh);
-    const dh = localStorage.getItem(SK.dhist);
-    if (dh) S.docHistory = JSON.parse(dh);
-  } catch(e) { console.error('load error', e); }
-}
-
-function saveAll() {
-  localStorage.setItem(SK.tpl, JSON.stringify(S.templates));
-  localStorage.setItem(SK.ctr, JSON.stringify(S.centers));
-  localStorage.setItem(SK.set, JSON.stringify(S.settings));
-  localStorage.setItem(SK.guide, S.guide);
-  localStorage.setItem(SK.ghist, JSON.stringify(S.guideHistory));
-  localStorage.setItem(SK.dhist, JSON.stringify(S.docHistory));
-}
-
-function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
-
-// ============================================================
-// FORMULA EVALUATION (BUG FIX: multi-row sum support)
-// ============================================================
-function evalCalc(expr, values) {
-  if (!expr) return '';
-  let resolved = String(expr);
-
-  // SUM(field1, field2, ...) or SUM(prefix*)
-  resolved = resolved.replace(/SUM\(([^)]+)\)/gi, function(_, args) {
-    const keys = args.split(',').map(k => k.trim());
-    let total = 0;
-    for (const pattern of keys) {
-      if (pattern.includes('*')) {
-        const re = new RegExp('^' + pattern.replace(/\*/g, '.*') + '$');
-        for (const [k, v] of Object.entries(values)) {
-          if (re.test(k)) total += parseFloat(String(v || 0).replace(/,/g, '')) || 0;
-        }
-      } else {
-        const raw = values[pattern];
-        if (raw !== undefined) total += parseFloat(String(raw).replace(/,/g, '')) || 0;
+    // config (센터 + 설정)
+    const cfg = await sbGet('doc_config','id=eq.1&select=*');
+    if (cfg?.[0]) {
+      if (cfg[0].centers?.length) S.centers = cfg[0].centers;
+      if (cfg[0].cfg) {
+        Object.assign(S.cfg, cfg[0].cfg);
+        // guide가 비어있으면 DEFAULT_GUIDE 사용 (Supabase에 저장 안 된 경우)
+        if (!S.cfg.guide) S.cfg.guide = DEFAULT_GUIDE;
       }
     }
-    return total;
-  });
+    // 템플릿
+    const tpls = await sbGet('doc_templates','select=*&order=created_at.asc');
+    if (tpls?.length) S.templates = tpls.map(t => ({
+      id:t.id, name:t.name, centerId:t.center_id,
+      deadline:t.deadline, deadlineDay:t.deadline_day||0,
+      createdAt:t.created_at?.slice(0,10),
+      titleTemplate:t.title_template,
+      bodyTemplate:t.body_template,
+      fields:t.fields_schema||[]
+    }));
+    // 이력
+    const hist = await sbGet('doc_history','select=*&order=created_at.desc&limit=50');
+    if (hist?.length) S.history = hist.map(h => ({
+      id:h.id, templateId:h.template_id, centerId:h.center_id,
+      title:h.title, values:h.field_values||{},
+      ts: new Date(h.created_at).getTime()
+    }));
+    // 로컬에도 저장
+    localStorage.setItem('docapp3', JSON.stringify(S));
+  } catch(e) { console.warn('Supabase 로드 실패, 로컬 사용:', e); }
+}
 
-  // Replace field keys with values (word boundary)
-  resolved = resolved.replace(/[\uAC00-\uD7A3a-zA-Z_][\uAC00-\uD7A3a-zA-Z0-9_]*/g, function(m) {
-    if (values[m] !== undefined) {
-      return parseFloat(String(values[m]).replace(/,/g, '')) || 0;
-    }
-    return m;
-  });
-
+// Supabase 백그라운드 동기화
+async function syncToSupabase() {
   try {
-    const result = Function('"use strict"; return (' + resolved + ')')();
-    return isNaN(result) ? '계산오류' : result;
-  } catch(e) { return '계산오류'; }
+    // config 업데이트
+    await sbPatch('doc_config','id=eq.1',{
+      centers: S.centers,
+      cfg: { font:S.cfg.font, fsize:S.cfg.fsize, tfsize:S.cfg.tfsize,
+              lh:S.cfg.lh, bpx:S.cfg.bpx, guide:S.cfg.guide||'' }
+    });
+  } catch(e) { console.warn('Supabase 동기화 실패:', e); }
 }
 
-// BUG FIX: date fields should NOT get comma formatting
-function formatFieldValue(field, val) {
-  if (val === '' || val === null || val === undefined) return '';
-  if (field.type === 'number' || field.type === 'formula') {
-    const n = parseFloat(String(val).replace(/,/g, ''));
-    if (!isNaN(n)) return n.toLocaleString('ko-KR');
-  }
-  // date, text, yearmonth → no comma
-  return String(val);
-}
-
-// ============================================================
-// YEARMONTH AUTO-DERIVE (청구연월 → 본문 날짜 자동반영)
-// ============================================================
-function parseYearMonth(raw) {
-  if (!raw) return null;
-  let m = String(raw).match(/(\d{4})년\s*(\d{1,2})월/);
-  if (m) return { year: parseInt(m[1]), month: parseInt(m[2]) };
-  m = String(raw).match(/(\d{4})[.\-\/](\d{1,2})/);
-  if (m) return { year: parseInt(m[1]), month: parseInt(m[2]) };
-  m = String(raw).match(/(\d{4})(\d{2})/);
-  if (m) return { year: parseInt(m[1]), month: parseInt(m[2]) };
-  return null;
-}
-
-function getDerivedValues(values, fields) {
-  const derived = {};
-  // Find yearmonth field
-  const ymField = fields.find(f =>
-    f.type === 'yearmonth' ||
-    f.key === '청구연월' ||
-    f.key.includes('연월') ||
-    (f.autoMonth === true || f.autoMonth === 'true')
-  );
-  if (!ymField) return derived;
-  const raw = values[ymField.key];
-  const parsed = parseYearMonth(raw);
-  if (!parsed) return derived;
-  const { year, month } = parsed;
-  const lastDay = new Date(year, month, 0).getDate();
-  derived['_청구년'] = String(year);
-  derived['_청구월'] = String(month);
-  derived['_청구월2'] = String(month).padStart(2, '0');
-  derived['_청구기간시작'] = year + '. ' + month + '. 1.';
-  derived['_청구기간종료'] = year + '. ' + month + '. ' + lastDay + '.';
-  derived['_붙임연월'] = year + '년 ' + month + '월';
-  derived['_붙임연월축약'] = "'" + String(year).slice(2) + '년 ' + month + '월';
-  return derived;
-}
-
-// ============================================================
-// PREVIEW RENDERING
-// ============================================================
-function renderPreview(tpl, allValues) {
-  if (!tpl) return '';
-  let body = String(tpl.bodyTpl || '');
-  // Replace {{key}} with values (BUG FIX: no AI_ANALYSIS raw text)
-  for (const [k, v] of Object.entries(allValues)) {
-    body = body.split('{{' + k + '}}').join(v !== undefined && v !== null ? v : '');
-  }
-  // BUG FIX: replace [AI_ANALYSIS] placeholder
-  const aiText = document.getElementById('ai-analysis-box').innerText;
-  const aiDisplay = (aiText && aiText !== '(초안 생성 후 AI 분석이 여기 표시됩니다)') ? aiText : '';
-  body = body.replace(/\[AI_ANALYSIS\]/g, aiDisplay || '');
-  return body;
-}
-
-function renderTitlePreview(titleTpl, allValues) {
-  if (!titleTpl) return '';
-  let title = String(titleTpl);
-  for (const [k, v] of Object.entries(allValues)) {
-    title = title.split('{{' + k + '}}').join(v !== undefined && v !== null ? v : '');
-  }
-  return title;
-}
-
-// ============================================================
-// SIDEBAR
-// ============================================================
-function renderSidebar() {
-  const q = (document.getElementById('search-box').value || '').toLowerCase();
-  const container = document.getElementById('tpl-list');
-  container.innerHTML = '';
-
-  // Group by center
-  const groups = {};
-  for (const tpl of S.templates) {
-    if (q && !tpl.name.toLowerCase().includes(q)) continue;
-    const g = tpl.center || '__default__';
-    if (!groups[g]) groups[g] = [];
-    groups[g].push(tpl);
-  }
-
-  // Center order: __default__ first, then by center name
-  const centerOrder = ['__default__', ...S.centers.filter(c => c.id !== '__default__').map(c => c.id)];
-
-  for (const cid of centerOrder) {
-    if (!groups[cid]) continue;
-    const centerName = getCenterName(cid);
-    const groupDiv = document.createElement('div');
-    groupDiv.className = 'center-group';
-    groupDiv.innerHTML = '<div class="center-label">' + escH(centerName) + '</div>';
-    for (const tpl of groups[cid]) {
-      const item = document.createElement('div');
-      item.className = 'tpl-item' + (S.currentTplId === tpl.id ? ' active' : '');
-      item.innerHTML =
-        '<span class="tpl-item-name" onclick="selectTemplate(' + "'" + tpl.id + "'" + ')">' + escH(tpl.name) + '</span>' +
-        '<button class="tpl-item-del" onclick="confirmDeleteTpl(' + "'" + tpl.id + "'" + ',event)" title="삭제">✕</button>';
-      groupDiv.appendChild(item);
+// 템플릿 Supabase 저장
+async function saveTplToSupabase(tpl) {
+  const row = {
+    name:tpl.name, center_id:tpl.centerId, deadline:tpl.deadline,
+    deadline_day:tpl.deadlineDay||0, title_template:tpl.titleTemplate,
+    body_template:tpl.bodyTemplate, fields_schema:tpl.fields
+  };
+  if (tpl.id && !tpl.id.startsWith('t')) {
+    // uuid → PATCH
+    await sbPatch('doc_templates',`id=eq.${tpl.id}`,row);
+  } else {
+    // 로컬 id(t+timestamp) → INSERT, 반환된 uuid로 교체
+    const res = await sbPost('doc_templates', row);
+    if (res?.[0]?.id) {
+      const idx = S.templates.findIndex(t=>t.id===tpl.id);
+      if (idx>=0) S.templates[idx].id = res[0].id;
+      localStorage.setItem('docapp3', JSON.stringify(S));
     }
-    container.appendChild(groupDiv);
   }
 }
 
-function getCenterName(cid) {
-  if (cid === '__default__') return '기본문서';
-  const c = S.centers.find(c => c.id === cid);
-  return c ? c.name : cid;
+// 이력 Supabase 저장
+async function saveHistToSupabase(h) {
+  await sbPost('doc_history',{
+    template_id: h.templateId.startsWith('t') ? null : h.templateId,
+    center_id:h.centerId, title:h.title, field_values:h.values
+  });
 }
 
-// ============================================================
-// TEMPLATE SELECTION
-// ============================================================
-function selectTemplate(id) {
-  const tpl = S.templates.find(t => t.id === id);
-  if (!tpl) return;
-  S.currentTplId = id;
-  S.currentValues = {};
-  // Init values from fields
-  for (const f of (tpl.fields || [])) {
-    S.currentValues[f.key] = f.type === 'formula' ? '' : (f.defaultValue || '');
-  }
-  document.getElementById('welcome').style.display = 'none';
-  document.getElementById('editor').style.display = 'block';
-  document.getElementById('main-title').textContent = tpl.name;
-  const badge = document.getElementById('main-badge');
-  badge.textContent = getCenterName(tpl.center || '__default__');
-  badge.style.display = '';
-  document.getElementById('btn-move').style.display = '';
-  renderFields(tpl);
-  renderPreviewBox(tpl);
-  renderSidebar();
+// 템플릿 Supabase 삭제
+async function delTplFromSupabase(id) {
+  if (!id.startsWith('t')) await sbDelete('doc_templates',`id=eq.${id}`);
 }
 
-function currentTpl() {
-  return S.templates.find(t => t.id === S.currentTplId);
+// 이력 Supabase 삭제
+async function delHistFromSupabase(id) {
+  if (!id.startsWith('h')) await sbDelete('doc_history',`id=eq.${id}`);
 }
 
-// ============================================================
-// FIELDS RENDER
-// ============================================================
-function renderFields(tpl) {
-  const container = document.getElementById('fields-container');
-  container.innerHTML = '';
-  if (!tpl.fields || !tpl.fields.length) {
-    container.innerHTML = '<p style="color:#94a3b8;font-size:12px;">등록된 필드가 없습니다.</p>';
+// ── 헬퍼 ──
+const cn  = id => !id ? '기본문서' : (S.centers.find(c => c.id === id)?.name || '기본문서');
+const cc  = id => S.centers.find(c => c.id === id)?.color || '#888';
+const fmt = n  => (n === '' || n == null) ? '' : Number(n).toLocaleString('ko-KR');
+// 금액 키 판별: 액·금·총액·부가세·가액 포함
+const isAmt = k => /액|금|총액|부가세|가액/.test(k);
+const curTpl = () => S.templates.find(t => t.id === S.curTplId);
+
+// ══ 센터 탭 렌더 ══
+function renderCenterTabs() {
+  const el = document.getElementById('centerTabs');
+  const all = [
+    `<div class="ctab ${S.activeCenter === 'all' ? 'on' : ''}" onclick="setCenter('all')">전체</div>`,
+    `<div class="ctab ${S.activeCenter === '__default__' ? 'on' : ''}" onclick="setCenter('__default__')">
+       <div class="ctab-dot" style="background:#888"></div>기본문서
+     </div>`
+  ].join('');
+  const tabs = S.centers.map(c =>
+    `<div class="ctab ${S.activeCenter === c.id ? 'on' : ''}"
+       onclick="setCenter('${c.id}')"
+       ondblclick="openCenterEdit('${c.id}')"
+       title="더블클릭: 센터 수정">
+       <div class="ctab-dot" style="background:${c.color}"></div>${c.name}
+     </div>`
+  ).join('');
+  el.innerHTML = all + tabs;
+}
+function setCenter(id) {
+  S.activeCenter = id;
+  renderCenterTabs();
+  renderTplList();
+  renderHistList();
+}
+
+// ══ 템플릿 목록 (좌측 패널) ══
+function renderTplList(filter = '') {
+  const list = S.templates.filter(t => {
+    const isDefault = S.activeCenter === '__default__';
+    // 기본문서: centerId가 없거나 센터 목록에 없는 템플릿
+    const cok = S.activeCenter === 'all'
+      ? true
+      : isDefault
+        ? !S.centers.find(c => c.id === t.centerId)
+        : t.centerId === S.activeCenter;
+    const fok = !filter || t.name.includes(filter) || cn(t.centerId).includes(filter);
+    return cok && fok;
+  });
+  document.getElementById('tplCount').textContent = `${list.length}개`;
+  if (!list.length) {
+    document.getElementById('tplList').innerHTML =
+      '<div class="empty-msg">해당 센터의 템플릿이 없습니다</div>';
     return;
   }
-
-  const allValues = getComputedValues(tpl);
-
-  for (const field of tpl.fields) {
-    const div = document.createElement('div');
-    div.className = 'field-group';
-    const label = document.createElement('label');
-    label.textContent = field.label + (field.type === 'formula' ? ' (자동계산)' : '');
-    div.appendChild(label);
-
-    if (field.type === 'formula') {
-      const val = evalCalc(field.hint, allValues);
-      const formatted = formatFieldValue(field, val);
-      S.currentValues[field.key] = formatted;
-      const inp = document.createElement('input');
-      inp.value = formatted;
-      inp.readOnly = true;
-      inp.className = 'field-formula';
-      inp.title = '수식: ' + (field.hint || '');
-      div.appendChild(inp);
-    } else if (field.autoMonth === true || field.autoMonth === 'true' || field.type === 'yearmonth') {
-      const inp = document.createElement('input');
-      inp.type = 'text';
-      inp.placeholder = field.hint || '예: 2026년6월';
-      inp.value = S.currentValues[field.key] || '';
-      inp.dataset.key = field.key;
-      inp.oninput = function() {
-        S.currentValues[field.key] = this.value;
-        updateDerivedFields(tpl);
-        renderPreviewBox(tpl);
-      };
-      div.appendChild(inp);
-      // Show derived preview
-      const derived = getDerivedValues(S.currentValues, tpl.fields);
-      if (Object.keys(derived).length) {
-        const hint = document.createElement('small');
-        hint.style.color = '#10b981';
-        hint.style.fontSize = '10px';
-        hint.textContent = '→ ' + (derived['_붙임연월'] || '') + ' / ' + (derived['_청구기간시작'] || '') + '~' + (derived['_청구기간종료'] || '');
-        div.appendChild(hint);
-      }
-    } else {
-      const inp = document.createElement('input');
-      inp.type = field.type === 'date' ? 'date' : 'text';
-      inp.placeholder = field.hint || '';
-      inp.value = S.currentValues[field.key] || '';
-      if (field.key.includes('발행일') || field.type === 'date') {
-        // BUG FIX: date fields no special formatting
-        inp.dataset.isDate = 'true';
-      }
-      inp.dataset.key = field.key;
-      inp.dataset.type = field.type;
-      inp.oninput = function() {
-        let v = this.value;
-        // BUG FIX: number formatting only for number type, NOT date
-        if (field.type === 'number' && this.dataset.isDate !== 'true') {
-          v = v.replace(/[^0-9]/g, '');
-          if (v) {
-            const n = parseInt(v);
-            this.value = n.toLocaleString('ko-KR');
-            v = this.value;
-          }
-        }
-        S.currentValues[field.key] = v;
-        updateFormulaFields(tpl);
-        renderPreviewBox(tpl);
-      };
-      div.appendChild(inp);
-    }
-    container.appendChild(div);
-  }
-}
-
-function updateDerivedFields(tpl) {
-  // Re-render hint for yearmonth fields
-  renderFields(tpl);
-}
-
-function updateFormulaFields(tpl) {
-  const allValues = getComputedValues(tpl);
-  for (const field of (tpl.fields || [])) {
-    if (field.type === 'formula') {
-      const val = evalCalc(field.hint, allValues);
-      const formatted = formatFieldValue(field, val);
-      S.currentValues[field.key] = formatted;
-    }
-  }
-  // Update displayed formula inputs
-  const inputs = document.querySelectorAll('#fields-container input.field-formula');
-  for (const inp of inputs) {
-    const key = Object.keys(S.currentValues).find(k => inp.title.includes(k) || inp.value !== undefined);
-    // Re-render to update
-  }
-}
-
-function getComputedValues(tpl) {
-  const base = { ...S.currentValues };
-  // Add derived yearmonth values
-  const derived = getDerivedValues(S.currentValues, tpl.fields || []);
-  return { ...base, ...derived };
-}
-
-function renderPreviewBox(tpl) {
-  if (!tpl) return;
-  // Compute formula fields
-  const allValues = getComputedValues(tpl);
-  for (const f of (tpl.fields || [])) {
-    if (f.type === 'formula') {
-      const val = evalCalc(f.hint, allValues);
-      allValues[f.key] = formatFieldValue(f, val);
-    }
-  }
-  S.currentTitle = renderTitlePreview(tpl.titleTpl, allValues);
-  S.currentDraft = renderPreview(tpl, allValues);
-  document.getElementById('preview-box').textContent = S.currentTitle + '\n\n' + S.currentDraft;
-}
-
-// ============================================================
-// AI ANALYSIS (간소화: 전월대비 청구인원/금액 증감만 표기)
-// ============================================================
-function generateAIAnalysis() {
-  const tpl = currentTpl();
-  if (!tpl) return;
-  const allValues = getComputedValues(tpl);
-
-  // Find 인원 and 금액 related fields
-  let lines = [];
-  const prev = S.docHistory.filter(h => h.tplId === S.currentTplId).slice(-1)[0];
-
-  if (prev && prev.values) {
-    for (const f of (tpl.fields || [])) {
-      if (f.type === 'number' || f.type === 'formula') {
-        const curr = parseFloat(String(allValues[f.key] || 0).replace(/,/g, '')) || 0;
-        const prevVal = parseFloat(String(prev.values[f.key] || 0).replace(/,/g, '')) || 0;
-        const diff = curr - prevVal;
-        if (diff !== 0 && (f.label.includes('인원') || f.label.includes('금액') || f.label.includes('합계'))) {
-          const sign = diff > 0 ? '+' : '';
-          lines.push('- ' + f.label + ': ' + sign + diff.toLocaleString('ko-KR') + (f.label.includes('인원') ? '명' : '원') + ' (' + (diff > 0 ? '증가' : '감소') + ')');
-        }
+  const today = new Date().getDate();
+  document.getElementById('tplList').innerHTML = list.map(t => {
+    const isOn = t.id === S.curTplId;
+    // D-day 계산
+    let ddayHtml = '';
+    if (t.deadlineDay) {
+      const diff = t.deadlineDay - today;
+      if (diff >= 0 && diff <= 7) {
+        const cls = diff <= 2 ? 'urg' : diff <= 5 ? 'sn' : 'ok';
+        ddayHtml = `<span class="tpl-dday ${cls}">D-${diff === 0 ? '0' : diff}</span>`;
       }
     }
-  }
-
-  const ymField = (tpl.fields || []).find(f => f.type === 'yearmonth' || f.key.includes('연월'));
-  const ymStr = ymField ? (allValues[ymField.key] || '') : '';
-
-  if (lines.length === 0) {
-    document.getElementById('ai-analysis-box').textContent = ymStr + ' 전월대비 변동 없음 또는 이전 이력 없음';
-  } else {
-    document.getElementById('ai-analysis-box').textContent = ymStr + ' 전월대비 분석:\n' + lines.join('\n');
-  }
-  renderPreviewBox(tpl);
+    // 센터 이동 드롭다운
+    const moveOpts = S.centers.map(c =>
+      `<option value="${c.id}" ${c.id===t.centerId?'selected':''}>${c.name}</option>`
+    ).join('');
+    return `<div class="tpl-item ${isOn ? 'on' : ''}" onclick="loadTpl('${t.id}')">
+      <div class="tpl-item-left" style="min-width:0;flex:1;">
+        <div class="tpl-dot" style="background:${cc(t.centerId)}"></div>
+        <div class="tpl-info">
+          <div class="tpl-name">${t.name}</div>
+          <div class="tpl-meta">${cn(t.centerId)}${t.deadline ? ' · ' + t.deadline : ''}</div>
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;gap:4px;flex-shrink:0;">
+        ${ddayHtml}
+        <select onchange="moveTplCenter('${t.id}',this.value);event.stopPropagation()"
+          onclick="event.stopPropagation()"
+          title="센터 이동"
+          style="font-size:10px;padding:2px 4px;border:1px solid var(--border);
+            border-radius:var(--r-sm);background:var(--surface);color:var(--t2);
+            cursor:pointer;max-width:70px;">
+          ${moveOpts}
+        </select>
+      </div>
+    </div>`;
+  }).join('');
 }
 
-function generateDraft() {
-  const tpl = currentTpl();
-  if (!tpl) { alert('템플릿을 선택하세요'); return; }
-  renderPreviewBox(tpl);
-  alert('초안이 생성되었습니다. 미리보기를 확인하세요.');
-}
-
-// ============================================================
-// COPY & HISTORY
-// ============================================================
-function copyTitle() {
-  if (!S.currentTitle) { alert('먼저 초안을 생성하세요'); return; }
-  navigator.clipboard.writeText(S.currentTitle).then(() => alert('제목이 복사되었습니다'));
-}
-
-function copyBody() {
-  const text = document.getElementById('preview-box').textContent;
-  if (!text) { alert('먼저 초안을 생성하세요'); return; }
-  navigator.clipboard.writeText(text).then(() => alert('본문이 복사되었습니다'));
-}
-
-function saveHistory() {
-  const tpl = currentTpl();
-  if (!tpl) return;
-  const entry = {
-    id: uid(),
-    tplId: S.currentTplId,
-    tplName: tpl.name,
-    ts: new Date().toLocaleString('ko-KR'),
-    values: { ...S.currentValues },
-    title: S.currentTitle,
-    body: S.currentDraft
-  };
-  S.docHistory.unshift(entry);
-  if (S.docHistory.length > 100) S.docHistory = S.docHistory.slice(0, 100);
-  saveAll();
-  alert('이력이 저장되었습니다');
-}
-
-// ============================================================
-// TEMPLATE DELETE
-// ============================================================
-function confirmDeleteTpl(id, event) {
-  if (event) event.stopPropagation();
-  const tpl = S.templates.find(t => t.id === id);
-  if (!tpl) return;
-  if (!confirm('[' + tpl.name + '] 템플릿을 삭제하시겠습니까?\n삭제 후 복구할 수 없습니다.')) return;
-  S.templates = S.templates.filter(t => t.id !== id);
-  if (S.currentTplId === id) {
-    S.currentTplId = null;
-    document.getElementById('welcome').style.display = '';
-    document.getElementById('editor').style.display = 'none';
-    document.getElementById('main-title').textContent = '템플릿을 선택하세요';
-    document.getElementById('main-badge').style.display = 'none';
-    document.getElementById('btn-move').style.display = 'none';
-  }
-  saveAll();
-  renderSidebar();
-}
-
-function confirmDeleteCurrentTpl() {
-  if (!S.currentTplId) return;
-  confirmDeleteTpl(S.currentTplId, null);
-}
-
-// ============================================================
-// TEMPLATE MOVE (기본문서 포함)
-// ============================================================
-function openMoveModal() {
-  if (!S.currentTplId) return;
-  const sel = document.getElementById('move-target');
-  sel.innerHTML = '';
-  // Always include 기본문서
-  const defaultOpt = document.createElement('option');
-  defaultOpt.value = '__default__';
-  defaultOpt.textContent = '기본문서';
-  sel.appendChild(defaultOpt);
-  for (const c of S.centers) {
-    if (c.id === '__default__') continue;
-    const opt = document.createElement('option');
-    opt.value = c.id;
-    opt.textContent = c.name;
-    sel.appendChild(opt);
-  }
-  // Set current
-  const tpl = currentTpl();
-  if (tpl) sel.value = tpl.center || '__default__';
-  openModal('modal-move');
-}
-
-function applyMove() {
-  const tpl = currentTpl();
-  if (!tpl) return;
-  tpl.center = document.getElementById('move-target').value;
-  saveAll();
-  renderSidebar();
-  document.getElementById('main-badge').textContent = getCenterName(tpl.center);
-  closeModal('modal-move');
-  alert('이동 완료: ' + getCenterName(tpl.center));
-}
-
-// ============================================================
-// NEW TEMPLATE MODAL
-// ============================================================
-function openNewTplModal() {
-  // Populate center select
-  const sel = document.getElementById('new-center');
-  sel.innerHTML = '<option value="__default__">기본문서</option>';
-  for (const c of S.centers) {
-    if (c.id === '__default__') continue;
-    sel.innerHTML += '<option value="' + escH(c.id) + '">' + escH(c.name) + '</option>';
-  }
-  document.getElementById('new-fields-rows').innerHTML = '';
-  openModal('modal-new');
-}
-
-function addFieldRow(containerId) {
-  const container = document.getElementById(containerId);
-  const row = document.createElement('div');
-  row.className = 'field-editor-row';
-  row.innerHTML =
-    '<input type="text" placeholder="필드키" class="fkey">' +
-    '<input type="text" placeholder="표시명" class="flabel">' +
-    '<select class="ftype">' +
-      '<option value="text">텍스트</option>' +
-      '<option value="number">숫자</option>' +
-      '<option value="date">날짜</option>' +
-      '<option value="yearmonth">연월(청구)</option>' +
-      '<option value="formula">자동계산</option>' +
-    '</select>' +
-    '<input type="text" placeholder="힌트 또는 수식 예: SUM(행1_금액,행2_금액)" class="fhint">' +
-    '<input type="text" placeholder="기본값" class="fdefault">' +
-    '<select class="fautomonth"><option value="">-</option><option value="true">월자동</option></select>' +
-    '<button type="button" onclick="this.parentElement.remove()" class="field-del-btn">✕</button>';
-  container.appendChild(row);
-}
-
-function collectFieldRows(containerId) {
-  const rows = document.querySelectorAll('#' + containerId + ' .field-editor-row');
-  const fields = [];
-  for (const row of rows) {
-    const key = row.querySelector('.fkey').value.trim();
-    const label = row.querySelector('.flabel').value.trim();
-    if (!key) continue;
-    fields.push({
-      key,
-      label: label || key,
-      type: row.querySelector('.ftype').value,
-      hint: row.querySelector('.fhint').value.trim(),
-      defaultValue: row.querySelector('.fdefault').value.trim(),
-      autoMonth: row.querySelector('.fautomonth').value === 'true'
+// ══ 이력 목록 (좌측 패널) ══
+function renderHistList() {
+  // 센터 필터 옵션 최신화 (센터 추가/삭제 시 자동 반영)
+  const sel = document.getElementById('histCenterFilter');
+  if (sel) {
+    const existing = [...sel.options].map(o => o.value);
+    S.centers.forEach(c => {
+      if (!existing.includes(c.id)) {
+        const o = document.createElement('option');
+        o.value = c.id; o.textContent = c.name; sel.appendChild(o);
+      }
+    });
+    // 삭제된 센터 옵션 제거
+    [...sel.options].forEach(o => {
+      if (o.value && !S.centers.find(c => c.id === o.value)) o.remove();
     });
   }
-  return fields;
+  // 현재 검색어·센터 필터값 읽기
+  const keyword = document.getElementById('histSearchInput')?.value || '';
+  filterHistList(keyword);
 }
 
-function saveNewTemplate() {
-  const activeTab = document.querySelector('#modal-new .tab-panel.active');
-  if (activeTab.id === 'new-tab-direct') {
-    const name = document.getElementById('new-name').value.trim();
-    if (!name) { alert('문서명을 입력하세요'); return; }
-    const tpl = {
-      id: uid(),
-      name,
-      center: document.getElementById('new-center').value,
-      deadline: document.getElementById('new-deadline').value,
-      titleTpl: document.getElementById('new-title-tpl').value.trim(),
-      fields: collectFieldRows('new-fields-rows'),
-      bodyTpl: document.getElementById('new-body-tpl').value.trim(),
-      created: new Date().toISOString(),
-      updated: new Date().toISOString()
-    };
-    S.templates.push(tpl);
-    saveAll();
-    renderSidebar();
-    closeModal('modal-new');
-    selectTemplate(tpl.id);
-  } else {
-    alert('직접 입력 탭에서 저장하거나, 분석 결과를 확인 후 저장하세요');
-  }
-}
+// 검색어 + 센터 필터 적용 후 이력 목록 렌더
+function filterHistList(keyword) {
+  const centerVal = document.getElementById('histCenterFilter')?.value || '';
+  // 센터 탭 필터와 독립적으로 동작 (이력 자체 필터 우선)
+  const list = [...S.history]
+    .filter(h => {
+      const centerOk = centerVal
+        ? h.centerId === centerVal
+        : (S.activeCenter === 'all' || h.centerId === S.activeCenter);
+      const keyOk = !keyword || h.title.includes(keyword) || cn(h.centerId).includes(keyword);
+      return centerOk && keyOk;
+    })
+    .sort((a, b) => b.ts - a.ts)
+    .slice(0, 20); // 검색 시 최대 20건 표시
 
-// ============================================================
-// MHT / TEXT ANALYSIS (담당자 자동 셋팅)
-// ============================================================
-function analyzeMHTForManagers(text) {
-  const result = { managers: [], name: '', dept: '', phone: '', email: '' };
-  // Name patterns: 담당자: 홍길동 / 작성자: 홍길동
-  const nameMatch = text.match(/(?:담당자|작성자|담당|연락처)\s*[:\:]\s*([가-힣]{2,5})/);
-  if (nameMatch) result.name = nameMatch[1];
-  // Phone
-  const phoneMatch = text.match(/(0\d{1,2}[-\s]?\d{3,4}[-\s]?\d{4})/);
-  if (phoneMatch) result.phone = phoneMatch[1];
-  // Email
-  const emailMatch = text.match(/([a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,})/);
-  if (emailMatch) result.email = emailMatch[1];
-  // Dept
-  const deptMatch = text.match(/([가-힣]{2,10}(?:팀|부|센터|본부|실))/);
-  if (deptMatch) result.dept = deptMatch[1];
-  if (result.name || result.phone || result.email) {
-    result.managers = [{ name: result.name, dept: result.dept, phone: result.phone, email: result.email }];
-  }
-  return result;
-}
+  const badge = document.getElementById('histBadge');
+  badge.textContent = S.history.length;
+  badge.style.display = S.history.length ? 'inline-flex' : 'none';
 
-function handleMHTFile(input) {
-  const file = input.files[0];
-  if (!file) return;
-  const reader = new FileReader();
-  reader.onload = function(e) {
-    const text = e.target.result;
-    const managerInfo = analyzeMHTForManagers(text);
-    showMHTAnalysisResult(managerInfo, text);
-  };
-  reader.readAsText(file, 'utf-8');
-}
-
-function showMHTAnalysisResult(info, rawText) {
-  const div = document.getElementById('mht-analyze-result');
-  div.style.display = 'block';
-  let html = '<div class="auto-suggest"><div class="auto-suggest-title">✅ 담당자 정보 자동 감지</div>';
-  html += '<div class="suggest-field"><label>담당자명</label><input id="sg-name" value="' + escH(info.name) + '"></div>';
-  html += '<div class="suggest-field"><label>부서</label><input id="sg-dept" value="' + escH(info.dept) + '"></div>';
-  html += '<div class="suggest-field"><label>전화번호</label><input id="sg-phone" value="' + escH(info.phone) + '"></div>';
-  html += '<div class="suggest-field"><label>이메일</label><input id="sg-email" value="' + escH(info.email) + '"></div>';
-  html += '<button class="suggest-apply-btn" onclick="applyManagerToCenter()">센터에 담당자 적용</button></div>';
-  div.innerHTML = html;
-}
-
-function applyManagerToCenter() {
-  const cid = document.getElementById('new-center').value;
-  let center = S.centers.find(c => c.id === cid);
-  if (!center) {
-    center = { id: cid, name: getCenterName(cid), managers: [] };
-    S.centers.push(center);
-  }
-  if (!center.managers) center.managers = [];
-  center.managers.push({
-    name: document.getElementById('sg-name').value,
-    dept: document.getElementById('sg-dept').value,
-    phone: document.getElementById('sg-phone').value,
-    email: document.getElementById('sg-email').value
-  });
-  saveAll();
-  alert('담당자 정보가 센터에 적용되었습니다');
-}
-
-function analyzePasteText() {
-  const text = document.getElementById('paste-text').value;
-  if (!text) return;
-  const info = analyzeMHTForManagers(text);
-  showPasteAnalysisResult(info);
-}
-
-function showPasteAnalysisResult(info) {
-  const div = document.getElementById('paste-analyze-result');
-  div.style.display = 'block';
-  div.innerHTML = '<div class="auto-suggest"><div class="auto-suggest-title">✅ 자동 분석 완료</div>' +
-    '<p style="font-size:11px;color:#374151;">담당자: ' + escH(info.name) + ' / ' + escH(info.dept) + ' / ' + escH(info.phone) + '</p>' +
-    '<p style="font-size:11px;color:#94a3b8;margin-top:4px;">직접 입력 탭에서 상세 내용을 확인·수정 후 저장하세요</p></div>';
-}
-
-// ============================================================
-// SETTINGS
-// ============================================================
-function openSettings() {
-  // Load values into form
-  const s = S.settings;
-  document.getElementById('set-font').value = s.font || '맑은 고딕';
-  document.getElementById('set-body-size').value = s.bodySize || '12pt';
-  document.getElementById('set-table-size').value = s.tableSize || '12pt';
-  document.getElementById('set-line-height').value = s.lineHeight || '200%';
-  document.getElementById('set-table-border').value = s.tableBorder || '1px (보통)';
-  renderCentersList();
-  // Load guide
-  document.getElementById('guide-content').value = S.guide;
-  renderGuideHistory();
-  openModal('modal-settings');
-}
-
-function saveSettings() {
-  S.settings = {
-    font: document.getElementById('set-font').value,
-    bodySize: document.getElementById('set-body-size').value,
-    tableSize: document.getElementById('set-table-size').value,
-    lineHeight: document.getElementById('set-line-height').value,
-    tableBorder: document.getElementById('set-table-border').value
-  };
-  saveAll();
-  alert('설정이 저장되었습니다');
-}
-
-// ============================================================
-// CENTERS MANAGEMENT (담당자 포함)
-// ============================================================
-function renderCentersList() {
-  const container = document.getElementById('centers-list');
-  container.innerHTML = '';
-  for (const c of S.centers) {
-    const div = document.createElement('div');
-    div.className = 'center-card';
-    div.dataset.cid = c.id;
-    let html = '<div class="center-card-header">' +
-      '<span>' + escH(c.name) + (c.id === '__default__' ? ' (기본)' : '') + '</span>';
-    if (c.id !== '__default__') {
-      html += '<button onclick="deleteCenter(' + "'" + c.id + "'" + ')" style="background:none;border:none;color:#ef4444;cursor:pointer;">✕ 삭제</button>';
-    }
-    html += '</div>';
-    // Managers
-    html += '<div>';
-    html += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr 28px;gap:6px;margin-bottom:4px;">' +
-      '<span style="font-size:10px;color:#94a3b8;">담당자명</span>' +
-      '<span style="font-size:10px;color:#94a3b8;">부서</span>' +
-      '<span style="font-size:10px;color:#94a3b8;">전화번호</span>' +
-      '<span style="font-size:10px;color:#94a3b8;">이메일</span>' +
-      '<span></span></div>';
-    const managers = c.managers || [];
-    for (let i = 0; i < managers.length; i++) {
-      const mg = managers[i];
-      html += '<div class="manager-row" data-mi="' + i + '">' +
-        '<input type="text" value="' + escH(mg.name || '') + '" placeholder="이름" class="mg-name">' +
-        '<input type="text" value="' + escH(mg.dept || '') + '" placeholder="부서" class="mg-dept">' +
-        '<input type="text" value="' + escH(mg.phone || '') + '" placeholder="전화번호" class="mg-phone">' +
-        '<input type="text" value="' + escH(mg.email || '') + '" placeholder="이메일" class="mg-email">' +
-        '<button onclick="removeManager(' + "'" + c.id + "'," + i + ')" style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:12px;">✕</button>' +
-        '</div>';
-    }
-    html += '<button onclick="addManager(' + "'" + c.id + "'" + ')" style="margin-top:4px;padding:3px 8px;background:#e2e8f0;border:none;border-radius:4px;cursor:pointer;font-size:11px;">+ 담당자 추가</button>';
-    html += '</div>';
-    div.innerHTML = html;
-    container.appendChild(div);
-  }
-}
-
-function addCenter() {
-  const name = prompt('새 센터 이름:');
-  if (!name) return;
-  S.centers.push({ id: uid(), name: name.trim(), managers: [] });
-  saveAll();
-  renderCentersList();
-  renderSidebar();
-}
-
-function deleteCenter(id) {
-  if (!confirm('센터를 삭제하면 해당 센터의 템플릿이 기본문서로 이동됩니다. 계속하시겠습니까?')) return;
-  S.centers = S.centers.filter(c => c.id !== id);
-  // Move templates
-  for (const t of S.templates) {
-    if (t.center === id) t.center = '__default__';
-  }
-  saveAll();
-  renderCentersList();
-  renderSidebar();
-}
-
-function addManager(cid) {
-  const center = S.centers.find(c => c.id === cid);
-  if (!center) return;
-  if (!center.managers) center.managers = [];
-  center.managers.push({ name: '', dept: '', phone: '', email: '' });
-  renderCentersList();
-}
-
-function removeManager(cid, idx) {
-  const center = S.centers.find(c => c.id === cid);
-  if (!center || !center.managers) return;
-  center.managers.splice(idx, 1);
-  renderCentersList();
-}
-
-function saveCenters() {
-  // Collect from DOM
-  const cards = document.querySelectorAll('#centers-list .center-card');
-  for (const card of cards) {
-    const cid = card.dataset.cid;
-    const center = S.centers.find(c => c.id === cid);
-    if (!center) continue;
-    center.managers = [];
-    const rows = card.querySelectorAll('.manager-row');
-    for (const row of rows) {
-      center.managers.push({
-        name: row.querySelector('.mg-name').value.trim(),
-        dept: row.querySelector('.mg-dept').value.trim(),
-        phone: row.querySelector('.mg-phone').value.trim(),
-        email: row.querySelector('.mg-email').value.trim()
-      });
-    }
-  }
-  saveAll();
-  alert('센터 정보가 저장되었습니다');
-}
-
-// ============================================================
-// GUIDE (수정 이력 저장)
-// ============================================================
-function saveGuide() {
-  const content = document.getElementById('guide-content').value;
-  // Save history entry
-  S.guideHistory.unshift({
-    id: uid(),
-    ts: new Date().toLocaleString('ko-KR'),
-    content: S.guide // save previous before overwriting
-  });
-  if (S.guideHistory.length > 20) S.guideHistory = S.guideHistory.slice(0, 20);
-  S.guide = content;
-  saveAll();
-  renderGuideHistory();
-  alert('가이드가 저장되었습니다');
-}
-
-function resetGuide() {
-  if (!confirm('기본 KT IS 가이드로 초기화하시겠습니까?')) return;
-  document.getElementById('guide-content').value = DEFAULT_GUIDE;
-}
-
-function renderGuideHistory() {
-  const container = document.getElementById('guide-history-list');
-  if (!container) return;
-  if (!S.guideHistory.length) {
-    container.innerHTML = '<p style="color:#94a3b8;font-size:11px;">수정 이력이 없습니다</p>';
+  if (!list.length) {
+    document.getElementById('histList').innerHTML =
+      `<div class="empty-msg">${keyword ? '검색 결과 없음' : '저장된 이력 없음'}</div>`;
     return;
   }
-  container.innerHTML = S.guideHistory.slice(0, 5).map((h, i) =>
-    '<div class="history-item">' +
-    '<div class="history-item-header"><span>' + escH(h.ts) + '</span>' +
-    '<button onclick="restoreGuideVersion(' + i + ')" style="background:none;border:none;color:#3b82f6;cursor:pointer;font-size:10px;">복원</button>' +
-    '</div>' +
-    '<div class="history-item-body">' + escH((h.content || '').slice(0, 100)) + '...</div>' +
-    '</div>'
-  ).join('');
+  document.getElementById('histList').innerHTML = list.map(h => {
+    const dt = new Date(h.ts).toLocaleDateString('ko-KR', { month:'short', day:'numeric' });
+    return `<div class="hist-item">
+      <div style="min-width:0;">
+        <div class="hist-name">${h.title}</div>
+        <div class="hist-meta">${cn(h.centerId)} · ${dt}</div>
+      </div>
+      <div class="flex gap6 items-center" style="flex-shrink:0;">
+        <button class="hist-reuse" onclick="reuseHist('${h.id}')">재사용</button>
+        <button class="btn-icon" onclick="delHist('${h.id}')" title="삭제" style="width:24px;height:24px;">
+          <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" style="width:12px;height:12px;">
+            <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/>
+          </svg>
+        </button>
+      </div>
+    </div>`;
+  }).join('');
 }
 
-function restoreGuideVersion(idx) {
-  if (!confirm('이 버전으로 복원하시겠습니까?')) return;
-  document.getElementById('guide-content').value = S.guideHistory[idx].content;
+// ══ 템플릿 로드 (작업 화면 열기) ══
+function loadTpl(tid, histId = null) {
+  const tpl = S.templates.find(t => t.id === tid);
+  if (!tpl) return;
+  S.curTplId = tid;
+  S.curVals  = {};
+
+  // 직전 이력 조회 (같은 템플릿, 가장 최근)
+  const prev = [...S.history]
+    .filter(h => h.templateId === tid)
+    .sort((a, b) => b.ts - a.ts)[0];
+
+  if (histId) {
+    // 이력 재사용: 저장된 값 그대로 전체 복원
+    const h = S.history.find(x => x.id === histId);
+    if (h) S.curVals = { ...h.values };
+  } else if (prev) {
+    // 신규 작성: 필드별 autoFill 설정에 따라 이력값 복사 여부 결정
+    // autoFill:true  → 직전 이력값 자동 채움 (기본, 미설정 시 true)
+    // autoFill:false → 빈 상태로 시작 (날짜·당월금액 등 매번 새로 입력)
+    S.curVals = {};
+    tpl.fields.forEach(f => {
+      if (f.type === 'calc') return; // 자동계산은 항상 제외
+      const shouldFill = f.autoFill !== false; // 미설정이면 true
+      if (!shouldFill) return;
+      // '전월' 키 필드: 직전 이력의 '당월' 값으로 채움
+      if (f.key.startsWith('전월')) {
+        const prevKey = f.key.replace('전월', '당월');
+        if (prev.values[prevKey]) S.curVals[f.key] = prev.values[prevKey];
+      } else {
+        // 그 외 autoFill:true 필드: 직전 이력값 그대로 복사
+        if (prev.values[f.key]) S.curVals[f.key] = prev.values[f.key];
+      }
+    });
+  }
+
+  // UI 세팅
+  document.getElementById('wDocTitle').textContent = tpl.name;
+  document.getElementById('wDocSub').textContent   = `${cn(tpl.centerId)} · 변동 항목을 입력하세요`;
+  document.getElementById('wCenterBadge').textContent = cn(tpl.centerId);
+
+  // D-day 배지
+  const ddEl = document.getElementById('wDday');
+  if (tpl.deadlineDay) {
+    const diff = tpl.deadlineDay - new Date().getDate();
+    if (diff >= 0 && diff <= 7) {
+      const cls = diff <= 2 ? 'urg' : diff <= 5 ? 'sn' : 'ok';
+      ddEl.className = `tpl-dday ${cls}`;
+      ddEl.textContent = diff === 0 ? '오늘마감' : `D-${diff}`;
+      ddEl.style.display = 'inline-block';
+    } else ddEl.style.display = 'none';
+  } else ddEl.style.display = 'none';
+
+  // AI 섹션: amount 필드가 있을 때만 표시
+  const hasAmt = tpl.fields.some(f => f.type === 'amount');
+  document.getElementById('aiSection').style.display = hasAmt ? 'block' : 'none';
+  document.getElementById('aiDraft').textContent = '숫자를 입력한 뒤 초안 생성을 누르세요.';
+  document.getElementById('extraInput').value = '';
+
+  // 이력 자동반영 안내 배너
+  const prevH = [...S.history].filter(h=>h.templateId===tid).sort((a,b)=>b.ts-a.ts)[0];
+  const banner = document.getElementById('histAutofillBanner');
+  if (prevH && !histId) {
+    const dt = new Date(prevH.ts).toLocaleDateString('ko-KR',{month:'short',day:'numeric'});
+    banner.innerHTML = `<svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"
+      style="width:13px;height:13px;flex-shrink:0;">
+      <path d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+      <span><b>${dt}</b> 이력을 불러왔습니다 — autoFill ON 항목 자동 채움됨</span>
+      <span onclick="document.getElementById('histAutofillBanner').style.display='none'"
+        style="margin-left:auto;cursor:pointer;opacity:.6;">✕</span>`;
+    banner.style.display = 'flex';
+  } else {
+    banner.style.display = 'none';
+  }
+
+  // 자동입력 섹션 초기화 및 표시
+  document.getElementById('autofillSection').style.display = 'block';
+  document.getElementById('autofillBody').style.display = 'block';
+  document.getElementById('autofillChevron').style.transform = 'rotate(0deg)';
+  document.getElementById('autofillText').value = '';
+  document.getElementById('autofillResult').style.display = 'none';
+  clearImg();
+
+  // 화면 전환
+  document.getElementById('blankState').style.display   = 'none';
+  const ws = document.getElementById('workScreen');
+  ws.style.display = 'flex';
+
+  // 초기값 스냅샷 저장 (하이라이트 비교 기준)
+  S_sessionPrev = { ...S.curVals };
+  renderFields();
+  updatePreview();
+  renderTplList(); // 선택 상태 하이라이트 갱신
 }
 
-// ============================================================
-// BACKUP / RESTORE
-// ============================================================
-function getAllData() {
-  return { templates: S.templates, centers: S.centers, settings: S.settings, guide: S.guide, guideHistory: S.guideHistory, docHistory: S.docHistory };
+// ══ 동적 필드 렌더 ══
+function renderFields() {
+  const tpl = curTpl(); if (!tpl) return;
+  document.getElementById('dynFields').innerHTML = tpl.fields.map(f => {
+    if (f.type === 'calc') {
+      const v = calcF(f);
+      const disp = isAmt(f.key) ? fmt(v) : String(v);
+      return `<div class="fg">
+        <div class="flabel">${f.label} <span class="tag-sm tag-calc">자동계산</span></div>
+        <input type="text" id="f_${f.key}" value="${disp}" class="calc" readonly>
+      </div>`;
+    }
+    const v = S.curVals[f.key] || '';
+    // autoFill:true이고 값이 있는 필드에만 '이력자동채움' 태그 표시
+    const isPrev = v && f.autoFill !== false;
+    return `<div class="fg">
+      <div class="flabel">
+        ${f.label}
+        ${isPrev ? '<span class="tag-sm tag-prev">전월이력</span>' : ''}
+      </div>
+      <input type="text" id="f_${f.key}" value="${v}"
+        placeholder="${f.placeholder || ''}"
+        oninput="onFInput('${f.key}', this.value)">
+    </div>`;
+  }).join('');
 }
 
-function backupToClipboard() {
-  navigator.clipboard.writeText(JSON.stringify(getAllData(), null, 2))
-    .then(() => alert('클립보드에 복사되었습니다'));
+// ══ 필드 입력 처리 ══
+function onFInput(key, val) {
+  S.curVals[key] = val;
+  // 자동계산 필드 갱신
+  curTpl().fields.forEach(f => {
+    if (f.type !== 'calc') return;
+    const el = document.getElementById('f_' + f.key);
+    if (!el) return;
+    const v = calcF(f);
+    el.value = isAmt(f.key) ? fmt(v) : String(v);
+  });
+  checkWarn();
+  updatePreview();
 }
 
-function backupToJSON() {
-  const blob = new Blob([JSON.stringify(getAllData(), null, 2)], { type: 'application/json' });
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = 'kkangbi_backup_' + new Date().toISOString().slice(0, 10) + '.json';
-  a.click();
-}
+// ══ 자동계산 엔진 ══
+// 합산(+), 차액(-), 비율(%), 달성률 수식 모두 지원
+// calcAllFields: 전체 calc 필드를 한 번에 계산
+// 메모이제이션(cache) + 순환참조 방지(visiting Set) 적용
+function calcAllFields() {
+  const tpl = curTpl(); if (!tpl) return {};
+  const cache    = {};
+  const visiting = new Set();
 
-function restoreFromClipboard() {
-  if (!confirm('현재 데이터가 모두 덮어씌워집니다. 계속하시겠습니까?')) return;
-  navigator.clipboard.readText().then(text => {
+  function resolve(key) {
+    if (key in cache) return cache[key];
+    if (visiting.has(key)) return 0; // 순환 참조 차단
+
+    const field = tpl.fields.find(f => f.key === key);
+    if (!field) return 0;
+
+    if (field.type !== 'calc') {
+      const v = parseFloat(String(S.curVals[key] || '0').replace(/,/g, '')) || 0;
+      cache[key] = v;
+      return v;
+    }
+
+    visiting.add(key);
     try {
-      const data = JSON.parse(text);
-      applyRestoreData(data);
-    } catch(e) { alert('올바른 JSON 형식이 아닙니다'); }
+      let expr = field.formula;
+      // 긴 키부터 치환해서 키 이름 포함 관계 충돌 방지
+      tpl.fields.map(f => f.key)
+        .sort((a, b) => b.length - a.length)
+        .forEach(k => { expr = expr.split(k).join(resolve(k)); });
+      const result = Function('"use strict"; return (' + expr + ')')();
+      cache[key] = isNaN(result) ? 0 : Math.round(result);
+    } catch {
+      cache[key] = 0;
+    }
+    visiting.delete(key);
+    return cache[key];
+  }
+
+  tpl.fields.forEach(f => resolve(f.key));
+  return cache;
+}
+
+// calcF: 단일 필드 계산 — 기존 호출부와 호환
+function calcF(f) {
+  if (f.type !== 'calc') return '';
+  const all = calcAllFields();
+  const v = all[f.key];
+  return v === undefined ? '' : v;
+}
+
+// ══ 이상값 경고 (전월 대비 30% 초과 변동) ══
+function checkWarn() {
+  const tpl = curTpl(); if (!tpl) return;
+  const warns = [];
+  tpl.fields.forEach(f => {
+    if (f.key.startsWith('당월') && f.type === 'amount') {
+      const prevKey = f.key.replace('당월', '전월');
+      const pv = parseFloat(String(S.curVals[prevKey] || '0').replace(/,/g, ''));
+      const cv = parseFloat(String(S.curVals[f.key]  || '0').replace(/,/g, ''));
+      if (pv > 0 && cv > 0) {
+        const ratio = Math.abs((cv - pv) / pv * 100);
+        if (ratio > 30) warns.push(`${f.label}: 전월 대비 ${ratio.toFixed(0)}% 변동 — 확인하세요`);
+      }
+    }
+  });
+  const banner = document.getElementById('warnBanner');
+  banner.style.display = warns.length ? 'flex' : 'none';
+  if (warns.length) document.getElementById('warnText').innerHTML = warns.join('<br>');
+}
+
+// ══ 미리보기 ══
+function buildVals() {
+  const tpl = curTpl(); if (!tpl) return {};
+  const v = { ...S.curVals };
+  // 자동계산 필드 값 주입
+  // calcAllFields로 전체 일괄 계산 (재귀 없음)
+  const allCalc = calcAllFields();
+  tpl.fields.filter(f => f.type === 'calc').forEach(f => { v[f.key] = allCalc[f.key] ?? ''; });
+  // 센터별 기본값 우선 적용, 미설정 시 공통 설정값 fallback
+  const cur = S.templates.find(t => t.id === S.curTplId);
+  const cd  = (cur && S.centers.find(c => c.id === cur.centerId)?.defaults) || {};
+  v.cfg_bank      = cd.bank      || S.cfg.bank;
+  v.cfg_account   = cd.account   || S.cfg.account;
+  v.cfg_depositor = cd.depositor || S.cfg.depositor;
+  v.cfg_contact   = cd.contact   || S.cfg.contact;
+  // 붙임연월: 세금계산서일에서 추출, 없으면 청구연월 사용
+  const ym = (v['세금계산서일'] || '').match(/(\d{4})년\s*(\d{1,2})월/);
+  v['붙임연월'] = ym ? `${ym[1]}.${ym[2]}` : (v['청구연월'] || '');
+  return v;
+}
+
+function renderTmpl(tmpl, vals) {
+  return tmpl.replace(/\{\{(.+?)\}\}/g, (_, k) => {
+    const key = k.trim();
+    const val = vals[key];
+    if (val === undefined || val === '') return `{{${key}}}`;
+    const n = parseFloat(String(val).replace(/,/g, ''));
+    return (!isNaN(n) && isAmt(key)) ? fmt(n) : val;
   });
 }
 
-function restoreFromFile(input) {
-  const file = input.files[0];
-  if (!file) return;
-  if (!confirm('현재 데이터가 모두 덮어씌워집니다. 계속하시겠습니까?')) return;
+// 일반 텍스트 라인 렌더링: 변경된 {{키}} 값에 하이라이트 적용
+function renderTmplHighlight(tmpl, vals, prevVals) {
+  return tmpl.replace(/\{\{(.+?)\}\}/g, (match, k) => {
+    const key = k.trim();
+    const val = vals[key];
+    if (val === undefined || val === '') return match;
+    const n = parseFloat(String(val).replace(/,/g, ''));
+    const disp = (!isNaN(n) && isAmt(key)) ? fmt(n) : val;
+    // 직전 이력과 다른 값이면 하이라이트
+    if (isChanged(key, vals, prevVals)) {
+      return `<span class="changed">${disp}</span><span class="changed-label">변경</span>`;
+    }
+    return disp;
+  });
+}
+
+function updatePreview() {
+  const tpl = curTpl(); if (!tpl) return;
+  const vals   = buildVals();
+  const title  = renderTmpl(tpl.titleTemplate, vals);
+  const aiTxt  = document.getElementById('aiDraft')?.textContent || '';
+  const aiOk   = aiTxt && !aiTxt.includes('초안 생성을 누르세요');
+  const extra  = document.getElementById('extraInput')?.value || '';
+  const body   = tpl.bodyTemplate + (extra ? '\n\n' + extra : '');
+  const cfg    = S.cfg;
+
+  // 미리보기 메타 (총액 표시)
+  const totalVal = vals['청구총액'] || vals['총액'] || '';
+  document.getElementById('previewMeta').textContent =
+    totalVal ? `청구총액 ${fmt(totalVal)}원` : '';
+
+  // 직전 이력값 (하이라이트 비교용)
+  const prevHist = [...S.history]
+    .filter(h => h.templateId === S.curTplId)
+    .sort((a, b) => b.ts - a.ts)[0];
+  const prevVals = prevHist ? prevHist.values : null;
+
+  let html = `<div style="font-family:${cfg.font};font-size:${cfg.fsize};line-height:${cfg.lh};">`;
+  html += `<p class="doc-title">제 목 : ${title}</p>`;
+  html += '<div class="doc-body">' + parseBody(body, vals, aiOk, aiTxt, cfg, prevVals) + '</div>';
+  html += '</div>';
+  document.getElementById('previewDoc').innerHTML = html;
+}
+
+// 세션 초기값 (loadTpl 시점 스냅샷) — 하이라이트 기준
+let S_sessionPrev = {};
+
+// 값이 초기값(또는 직전 이력)과 달라졌는지 판별
+function isChanged(key, vals, prevVals) {
+  // 1순위: 전달된 prevVals (저장된 이력)
+  // 2순위: 세션 초기 스냅샷
+  const base = prevVals || S_sessionPrev;
+  if (!base || !Object.keys(base).length) return false;
+  const cur  = String(vals[key]  || '').replace(/,/g, '').trim();
+  const prev = String(base[key] || '').replace(/,/g, '').trim();
+  // 둘 다 값이 있고 다를 때만 변경으로 표시
+  return cur !== '' && prev !== '' && cur !== prev;
+}
+
+// 본문 파싱: 표([TABLE]), AI분석([AI_ANALYSIS]), 일반 텍스트 처리
+function parseBody(body, vals, aiOk, aiTxt, cfg, prevVals = null) {
+  // 값 렌더링 + 변경 하이라이트 처리
+  function renderCell(cell, vals, prevVals) {
+    const key      = cell.trim();
+    const rendered = renderTmpl(key, vals);
+    const rawNum   = parseFloat(String(vals[key] || '').replace(/,/g, ''));
+    const isNeg    = !isNaN(rawNum) && rawNum < 0;
+    const disp     = rendered.match(/^-?[\d,]+$/) ? fmt(parseFloat(rendered.replace(/,/g, ''))) : rendered;
+    const changed  = isChanged(key, vals, prevVals);
+    return { disp, isNeg, changed };
+  }
+  const lines = body.split('\n');
+  let html = '', i = 0;
+  while (i < lines.length) {
+    const ln = lines[i];
+    if (ln.startsWith('[TABLE:')) {
+      // 표 파싱
+      i++;
+      const rows = [];
+      while (i < lines.length && !lines[i].startsWith('[/TABLE]')) {
+        rows.push(lines[i].split('|'));
+        i++;
+      }
+      i++;
+      if (rows.length) {
+        html += `<p class="unit-note">(단위 : 원)</p>`;
+        html += `<table class="doc-table" style="font-size:${cfg.tfsize};"><tbody>`;
+        rows.forEach((row, ri) => {
+          html += '<tr>';
+          row.forEach(cell => {
+             const key      = cell.trim();
+             const rendered = renderTmpl(key, vals);
+             const rawNum   = parseFloat(String(vals[key] || '').replace(/,/g, ''));
+             const isNeg    = !isNaN(rawNum) && rawNum < 0;
+             const changed  = isChanged(key, vals, prevVals);
+             const disp     = rendered.match(/^-?[\d,]+$/)
+               ? fmt(parseFloat(rendered.replace(/,/g, '')))
+               : rendered;
+             const dispFinal = changed
+               ? `<span class="changed">${disp}</span><span class="changed-label">변경</span>`
+               : disp;
+             const bdr = `border:${cfg.bpx} solid var(--border2);`;
+             if (ri === 0) html += `<th style="${bdr}">${disp}</th>`;
+             else html += `<td class="${isNeg ? 'neg' : ''}" style="${bdr}">${dispFinal}</td>`;
+          });
+          html += '</tr>';
+        });
+        html += '</tbody></table>';
+      }
+    } else if (ln.trim() === '[AI_ANALYSIS]') {
+      if (aiOk) html += `<p style="white-space:pre-wrap;margin:4px 0;">${aiTxt}</p>`;
+      i++;
+    } else {
+      // 일반 텍스트 라인: 변경된 {{변수}} 값 하이라이트
+      const r = renderTmplHighlight(ln, vals, prevVals);
+      html += r.trim() ? `<p style="margin:1px 0;">${r}</p>` : '<br style="line-height:.4;">';
+      i++;
+    }
+  }
+  return html;
+}
+
+// ══ 복사 ══
+function cpTitle() {
+  if (!curTpl()) { gToast('문서를 먼저 선택하세요.'); return; }
+  const title = renderTmpl(curTpl().titleTemplate, buildVals());
+  navigator.clipboard.writeText(title)
+    .then(() => showToast('제목 복사됨'))
+    .catch(() => {
+      // fallback: textarea 방식
+      const ta = document.createElement('textarea');
+      ta.value = title; ta.style.position = 'fixed'; ta.style.opacity = '0';
+      document.body.appendChild(ta); ta.select();
+      document.execCommand('copy'); document.body.removeChild(ta);
+      showToast('제목 복사됨');
+    });
+}
+function cpBody() {
+  if (!curTpl()) { gToast('문서를 먼저 선택하세요.'); return; }
+  const html = document.getElementById('previewDoc').innerHTML;
+  const txt  = document.getElementById('previewDoc').innerText;
+  if (!txt.trim()) { gToast('미리보기 내용이 없습니다.'); return; }
+  // HTML+plaintext 동시 복사 (표 형태 유지)
+  navigator.clipboard.write([
+    new ClipboardItem({
+      'text/html':  new Blob([html], { type: 'text/html' }),
+      'text/plain': new Blob([txt],  { type: 'text/plain' })
+    })
+  ])
+  .then(() => showToast('본문 복사됨 (표 포함)'))
+  .catch(() => {
+    // fallback: 텍스트만 복사
+    navigator.clipboard.writeText(txt)
+      .then(() => showToast('본문 복사됨 (텍스트)'))
+      .catch(() => gToast('복사 실패 — 브라우저 설정을 확인하세요'));
+  });
+}
+function showToast(msg) {
+  const t = document.getElementById('cpToast');
+  t.textContent = '✓ ' + msg; t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2200);
+}
+
+// ══ 이력 저장 ══
+function saveHist() {
+  const tpl   = curTpl();
+  const vals  = buildVals();
+  const title = renderTmpl(tpl.titleTemplate, vals);
+  // 최대 50건 유지
+  if (S.history.length >= 50) S.history.pop();
+  S.history.unshift({
+    id: 'h' + Date.now(), templateId: tpl.id, centerId: tpl.centerId,
+    title, values: { ...S.curVals }, ts: Date.now()
+  });
+  persist(); renderHistList(); gToast('이력 저장됨');
+}
+function reuseHist(id) {
+  const h = S.history.find(x => x.id === id);
+  if (h) loadTpl(h.templateId, id);
+}
+function delHist(id) {
+  delHistFromSupabase(id);
+  S.history = S.history.filter(h => h.id !== id);
+  persist(); renderHistList();
+}
+
+// ══ AI 초안 생성 ══
+async function genAI() {
+  const btn = document.getElementById('aiBtn');
+  btn.textContent = '생성 중…'; btn.disabled = true;
+  const vals = buildVals();
+  const ctx  = curTpl().fields
+    .filter(f => f.type === 'amount' || f.type === 'calc')
+    .map(f => `${f.label}: ${isAmt(f.key) ? fmt(vals[f.key]) : vals[f.key] || '미입력'}`)
+    .join('\n');
+  const guide = S.cfg.guide || '';
+  const prompt = `${guide}
+
+위 가이드의 날짜 표기·문서 형식을 준수하여, 다음 결재문서 수치를 보고 전월 대비 변동 현황을 공문서 비고란 스타일로 2~3줄 작성하세요. 핵심만 간결하게.
+
+${ctx}`;
+  try {
+    const resp = await fetch('/api/claude', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 300,
+        messages: [{ role: 'user', content: prompt }] })
+    });
+    const data = await resp.json();
+    document.getElementById('aiDraft').textContent = data.content?.[0]?.text || '분석 결과 없음';
+    updatePreview();
+  } catch {
+    document.getElementById('aiDraft').textContent = '(직접 입력) 전월 대비 변동 내역을 입력하세요.';
+  }
+  btn.textContent = '초안 생성'; btn.disabled = false;
+}
+
+// ══ 자동입력 (텍스트/이미지 → AI → 필드 자동채움) ══
+
+// 섹션 접기/펼치기
+function toggleAutofill() {
+  const body    = document.getElementById('autofillBody');
+  const chevron = document.getElementById('autofillChevron');
+  const open    = body.style.display !== 'none';
+  body.style.display    = open ? 'none' : 'block';
+  chevron.style.transform = open ? 'rotate(-90deg)' : 'rotate(0deg)';
+}
+
+// 텍스트/이미지 탭 전환
+function switchAtab(idx) {
+  [0,1].forEach(i => {
+    document.getElementById('atab'  + i).classList.toggle('on', i === idx);
+    document.getElementById('aPane' + i).style.display = i === idx ? 'block' : 'none';
+  });
+}
+
+// 이미지 상태 저장
+let autofillImgBase64 = null;
+let autofillImgMime   = 'image/png';
+
+function setImg(file) {
+  if (!file || !file.type.startsWith('image/')) return;
+  if (file.size > 5 * 1024 * 1024) { gToast('이미지가 너무 큽니다 (5MB 이하)'); return; }
+  autofillImgMime = file.type || 'image/png';
   const reader = new FileReader();
   reader.onload = e => {
-    try {
-      const data = JSON.parse(e.target.result);
-      applyRestoreData(data);
-    } catch(e) { alert('파일을 읽을 수 없습니다'); }
+    const b64 = e.target.result.split(',')[1];
+    autofillImgBase64 = b64;
+    document.getElementById('imgPreview').src     = e.target.result;
+    document.getElementById('imgPreviewWrap').style.display = 'block';
+    document.getElementById('imgDropZone').style.display    = 'none';
   };
-  reader.readAsText(file);
+  reader.readAsDataURL(file);
 }
 
-function applyRestoreData(data) {
-  if (data.templates) S.templates = data.templates;
-  if (data.centers) S.centers = data.centers;
-  if (data.settings) S.settings = data.settings;
-  if (data.guide) S.guide = data.guide;
-  if (data.guideHistory) S.guideHistory = data.guideHistory;
-  if (data.docHistory) S.docHistory = data.docHistory;
-  saveAll();
-  renderSidebar();
-  alert('복원 완료');
+function clearImg() {
+  autofillImgBase64 = null;
+  const pw = document.getElementById('imgPreviewWrap');
+  const dz = document.getElementById('imgDropZone');
+  if (pw) pw.style.display = 'none';
+  if (dz) dz.style.display = 'flex';
+  const fi = document.getElementById('imgFileInput');
+  if (fi) fi.value = '';
 }
 
-// ============================================================
-// ANALYZE TEXT (자동입력)
-// ============================================================
-function analyzeText() {
-  const text = document.getElementById('auto-text').value;
-  if (!text) { alert('텍스트를 입력하세요'); return; }
-  const tpl = currentTpl();
-  if (!tpl || !tpl.fields) return;
-  // Simple extraction: look for numbers matching field hints
-  for (const f of tpl.fields) {
-    if (f.type === 'formula') continue;
-    const label = f.label;
-    // Try to find "label: value" or "label value" patterns
-    const re1 = new RegExp(label + '\\s*[:\\:]\\s*([\\d,]+)', 'i');
-    const m1 = text.match(re1);
-    if (m1) {
-      S.currentValues[f.key] = m1[1];
-    }
-  }
-  // Also try yearmonth
-  const ymMatch = text.match(/(\d{4})년\s*(\d{1,2})월/);
-  if (ymMatch) {
-    const ymField = tpl.fields.find(f => f.type === 'yearmonth' || f.key.includes('연월'));
-    if (ymField) S.currentValues[ymField.key] = ymMatch[1] + '년' + ymMatch[2] + '월';
-  }
-  renderFields(tpl);
-  renderPreviewBox(tpl);
-  alert('자동입력이 완료되었습니다. 값을 확인하고 수정하세요.');
-}
-
-function handleImageDrop(e) {
-  e.preventDefault();
-  const file = e.dataTransfer.files[0];
-  if (file && file.type.startsWith('image/')) {
-    alert('이미지 AI 분석은 서버 연동 후 사용 가능합니다');
-  }
-}
-
-function handleImageFile(input) {
-  if (input.files[0]) alert('이미지 AI 분석은 서버 연동 후 사용 가능합니다');
-}
-
-// ============================================================
-// UI HELPERS
-// ============================================================
-function toggleCard(header) {
-  const body = header.nextElementSibling;
-  const arrow = header.querySelector('span:last-child');
-  if (body.style.display === 'none') {
-    body.style.display = '';
-    if (arrow) arrow.textContent = '▼';
-  } else {
-    body.style.display = 'none';
-    if (arrow) arrow.textContent = '▶';
-  }
-}
-
-function switchTab(btn, panelId) {
-  const parent = btn.closest('.section-card-body, .modal-body, .tab-panel');
-  // Find tab container
-  const tabBar = btn.closest('.tab-bar');
-  const panelContainer = tabBar ? tabBar.parentElement : btn.parentElement;
-  tabBar.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-  btn.classList.add('active');
-  panelContainer.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
-  const target = document.getElementById(panelId);
-  if (target) target.classList.add('active');
-}
-
-function switchStab(btn, panelId) {
-  const modal = btn.closest('.modal-body, .modal');
-  btn.closest('.settings-tabs').querySelectorAll('.stab').forEach(b => b.classList.remove('active'));
-  btn.classList.add('active');
-  modal.querySelectorAll('.stab-panel').forEach(p => p.classList.remove('active'));
-  const t = document.getElementById(panelId);
-  if (t) t.classList.add('active');
-}
-
-function openModal(id) { document.getElementById(id).classList.add('open'); }
-function closeModal(id) { document.getElementById(id).classList.remove('open'); }
-
-function escH(s) {
-  return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
-}
-
-// Close modal on overlay click
-document.querySelectorAll('.modal-overlay').forEach(overlay => {
-  overlay.addEventListener('click', e => {
-    if (e.target === overlay) overlay.classList.remove('open');
-  });
-});
-
-// Paste image support
-document.addEventListener('paste', e => {
-  const items = e.clipboardData && e.clipboardData.items;
-  if (!items) return;
+function handleImgFile(file)  { setImg(file); }
+function handleImgDrop(event) { setImg(event.dataTransfer.files[0]); }
+function handleImgPaste(event) {
+  // 이미지 드롭존에 Ctrl+V로 클립보드 이미지 붙여넣기
+  const items = event.clipboardData?.items || [];
   for (const item of items) {
     if (item.type.startsWith('image/')) {
-      alert('이미지가 감지되었습니다. 이미지 탭에서 AI 분석을 이용하세요.');
+      event.preventDefault();
+      setImg(item.getAsFile());
+      return;
     }
   }
-});
-
-// ============================================================
-// INIT
-// ============================================================
-function init() {
-  loadAll();
-  // Ensure __default__ center exists
-  if (!S.centers.find(c => c.id === '__default__')) {
-    S.centers.unshift({ id: '__default__', name: '기본문서', managers: [] });
-    saveAll();
-  }
-  renderSidebar();
 }
 
-init();
+// 텍스트 탭: 붙여넣기 감지 시 자동 분석 시작
+function onAutofillTextPaste() {
+  const txt = document.getElementById('autofillText').value.trim();
+  if (txt.length > 10) {
+    // 짧은 딜레이 후 자동 분석 (사용자가 붙여넣기 완료 후)
+    clearTimeout(window._autofillTimer);
+    window._autofillTimer = setTimeout(() => runAutofill(), 600);
+  }
+}
+
+// AI 분석 실행
+async function runAutofill() {
+  const tpl = curTpl(); if (!tpl) return;
+  const activeTab  = document.getElementById('atab1').classList.contains('on') ? 1 : 0;
+  const overwrite  = document.getElementById('overwriteCheck').checked;
+  const btn        = document.getElementById('autofillBtn');
+  const resultEl   = document.getElementById('autofillResult');
+
+  // 입력 확인
+  const text = activeTab === 0 ? document.getElementById('autofillText').value.trim() : '';
+  if (activeTab === 0 && !text) { gToast('텍스트를 붙여넣어 주세요.'); return; }
+  if (activeTab === 1 && !autofillImgBase64) { gToast('이미지를 먼저 추가해 주세요.'); return; }
+
+  btn.textContent = '분석 중…'; btn.disabled = true;
+  resultEl.style.display = 'none';
+
+  // 필드 목록 컨텍스트 (AI가 어떤 키에 값을 채워야 하는지 알도록)
+  const fieldCtx = tpl.fields
+    .filter(f => f.type !== 'calc')
+    .map(f => `- ${f.key} (${f.label}): 현재값="${S.curVals[f.key] || '없음'}"`)
+    .join('\n');
+
+  const guide = S.cfg.guide || '';
+  const instruction = `${guide}
+
+다음은 결재문서 작성에 필요한 변동 항목 목록입니다:
+${fieldCtx}
+
+위 자료에서 각 항목에 해당하는 값을 찾아 JSON으로만 응답하세요. 찾지 못한 항목은 제외하세요.
+금액은 숫자만 (쉼표 제외), 날짜는 원본 형식 유지, 인원은 숫자+"명" 형식.
+
+응답 형식 (JSON만, 마크다운 없이):
+{"필드키": "값", "필드키2": "값2"}`;
+
+  try {
+    // 텍스트 또는 이미지로 API 호출
+    let userContent;
+    if (activeTab === 1) {
+      // 이미지 + 지시문
+      userContent = [
+        { type: 'image', source: { type: 'base64', media_type: autofillImgMime, data: autofillImgBase64 } },
+        { type: 'text',  text: instruction }
+      ];
+    } else {
+      // 텍스트
+      userContent = `다음 자료:\n${text.slice(0, 3000)}\n\n${instruction}`;
+    }
+
+    const resp = await fetch('/api/claude', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-6', max_tokens: 500,
+        messages: [{ role: 'user', content: userContent }]
+      })
+    });
+    const data   = await resp.json();
+    const rawTxt = (data.content?.[0]?.text || '').replace(/```json\n?|```\n?/g, '').trim();
+    const parsed = JSON.parse(rawTxt);
+
+    // 결과 적용
+    const resultRows = [];
+    let appliedCount = 0;
+
+    tpl.fields.forEach(f => {
+      if (f.type === 'calc') return;
+      if (parsed[f.key] === undefined) return;
+      const newVal = String(parsed[f.key]);
+      const curVal = S.curVals[f.key] || '';
+      // 덮어쓰기 옵션: 체크 시 기존값도 교체, 미체크 시 비어있는 필드만 채움
+      if (!overwrite && curVal) {
+        resultRows.push({ key: f.label, val: newVal, skipped: true, cur: curVal });
+        return;
+      }
+      S.curVals[f.key] = newVal;
+      appliedCount++;
+      resultRows.push({ key: f.label, val: newVal, skipped: false });
+    });
+
+    // 결과 미리보기 표시
+    if (resultRows.length) {
+      resultEl.innerHTML = `<div style="font-size:11px;font-weight:700;color:var(--green-t);margin-bottom:6px;">
+        ✓ ${appliedCount}개 항목 자동입력됨</div>` +
+        resultRows.map(r => r.skipped
+          ? `<div class="autofill-result-row"><span class="autofill-result-key">${r.key}</span>
+             <span class="autofill-result-skip">건너뜀 (기존값: ${r.cur})</span></div>`
+          : `<div class="autofill-result-row"><span class="autofill-result-key">${r.key}</span>
+             <span class="autofill-result-val">${r.val}</span></div>`
+        ).join('');
+      resultEl.style.display = 'block';
+    } else {
+      resultEl.innerHTML = '<div style="font-size:11px;color:var(--t3);">해당 항목을 찾지 못했습니다. 자료를 확인하거나 직접 입력해 주세요.</div>';
+      resultEl.style.display = 'block';
+    }
+
+    // 입력 필드 및 미리보기 갱신
+    renderFields();
+    updatePreview();
+    gToast(appliedCount ? `${appliedCount}개 항목 자동입력됨` : '입력 가능한 항목 없음');
+
+  } catch(e) {
+    resultEl.innerHTML = '<div style="font-size:11px;color:var(--red-t);">분석 실패 — API 연결을 확인하거나 직접 입력해 주세요.</div>';
+    resultEl.style.display = 'block';
+  }
+
+  btn.textContent = 'AI 분석 → 자동입력'; btn.disabled = false;
+}
+
+// 전역 paste 이벤트: 이미지 탭 활성화 시 어디서든 Ctrl+V로 이미지 붙여넣기
+document.addEventListener('paste', e => {
+  // 텍스트 입력 중이면 제외
+  const tag = document.activeElement?.tagName;
+  if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+  // 이미지 탭 활성화 여부
+  if (!document.getElementById('atab1')?.classList.contains('on')) return;
+  handleImgPaste(e);
+});
+
+// 이력 뱃지 업데이트
+function updateHistoryBadge() {
+  const b = document.getElementById('histBadge');
+  if (!b) return;
+  b.textContent = S.history.length;
+  b.style.display = S.history.length ? 'inline-flex' : 'none';
+}
+
+// ══ 백업/복원 ══
+
+function getBackupData() {
+  // Supabase URL/KEY 등 민감정보 제외하고 순수 데이터만
+  return JSON.stringify({
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    centers:   S.centers,
+    templates: S.templates,
+    history:   S.history.slice(0, 50),
+    cfg:       S.cfg
+  }, null, 2);
+}
+
+// 클립보드로 백업
+function backupClipboard() {
+  const data = getBackupData();
+  navigator.clipboard.writeText(data)
+    .then(() => gToast('백업 데이터가 클립보드에 복사됨'))
+    .catch(() => {
+      // fallback
+      const ta = document.createElement('textarea');
+      ta.value = data; ta.style.cssText = 'position:fixed;opacity:0;';
+      document.body.appendChild(ta); ta.select();
+      document.execCommand('copy'); document.body.removeChild(ta);
+      gToast('백업 데이터가 클립보드에 복사됨');
+    });
+}
+
+// JSON 파일로 백업
+function backupFile() {
+  const data = getBackupData();
+  const date = new Date().toISOString().slice(0,10).replace(/-/g,'');
+  const blob = new Blob([data], { type: 'application/json' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url; a.download = `kkangbi-doc-backup-${date}.json`;
+  a.click(); URL.revokeObjectURL(url);
+  gToast('백업 파일 저장됨');
+}
+
+// 데이터 복원 공통 처리
+function applyRestore(jsonStr) {
+  try {
+    const p = JSON.parse(jsonStr);
+    // 형식 검증
+    if (!p.centers || !p.templates || !p.cfg) {
+      gToast('올바른 백업 파일이 아닙니다'); return;
+    }
+    S.centers   = p.centers   || S.centers;
+    S.templates = p.templates || S.templates;
+    S.history   = p.history   || [];
+    if (p.cfg) Object.assign(S.cfg, p.cfg);
+    persist();
+    // 화면 전체 갱신
+    renderCenterTabs();
+    renderTplList();
+    renderHistList();
+    updateHistoryBadge();
+    renderDday();
+    // 설정 모달 갱신
+    renderCenterMgr();
+    loadCfg();
+    // Supabase 동기화
+    syncToSupabase();
+    gToast(`복원 완료 — 템플릿 ${S.templates.length}개, 이력 ${S.history.length}건`);
+  } catch(e) {
+    gToast('복원 실패: JSON 형식 오류');
+  }
+}
+
+// 클립보드에서 복원
+async function restoreClipboard() {
+  try {
+    const text = await navigator.clipboard.readText();
+    if (!text.trim()) { gToast('클립보드가 비어있습니다'); return; }
+    applyRestore(text);
+  } catch(e) {
+    gToast('클립보드 읽기 실패 — 파일 불러오기를 이용하세요');
+  }
+}
+
+// JSON 파일에서 복원
+function restoreFromFile(file) {
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => applyRestore(e.target.result);
+  reader.onerror = () => gToast('파일 읽기 실패');
+  reader.readAsText(file);
+  // input 초기화 (같은 파일 재업로드 가능하게)
+  document.getElementById('restoreFile').value = '';
+}
+
+// ══ 전역 토스트 ══
+function gToast(msg) {
+  const el = document.getElementById('gToast');
+  el.textContent = '✓ ' + msg; el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 2400);
+}
+
+// ══ 검색 ══
+function onSearch(v) { renderTplList(v); }
+
+// ══ 템플릿 수정 ══
+function editCurrentTpl() {
+  const tpl = curTpl(); if (!tpl) return;
+  S.editMode = true;
+  // 모달에 기존 값 채우기
+  document.getElementById('m_name').value     = tpl.name;
+  document.getElementById('m_titleTpl').value = tpl.titleTemplate;
+  document.getElementById('m_deadline').value = tpl.deadline || '';
+  document.getElementById('m_body').value     = tpl.bodyTemplate;
+  const sel = document.getElementById('m_center');
+  sel.innerHTML = S.centers.map(c =>
+    `<option value="${c.id}" ${c.id === tpl.centerId ? 'selected' : ''}>${c.name}</option>`
+  ).join('');
+  mFields = tpl.fields.map(f => ({ ...f }));
+  renderMFields();
+  document.getElementById('tplModalTitle').textContent = '템플릿 수정';
+  showStep3();
+  document.getElementById('tplModal').classList.add('open');
+  // 본문 변수 감지 실행 (기존 본문에서 변수 목록 즉시 표시)
+  setTimeout(detectBodyVars, 50);
+}
+
+// ══ 템플릿 모달 ══
+let mFields = [];
+function openTplModal() {
+  S.editMode = false;
+  mFields = [];
+  ['m_name','m_titleTpl','m_deadline','m_body'].forEach(id => document.getElementById(id).value = '');
+  const sel = document.getElementById('m_center');
+  sel.innerHTML = S.centers.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+  renderMFields();
+  document.getElementById('tplModalTitle').textContent = '새 템플릿 등록';
+  document.getElementById('mStep1').style.display = 'block';
+  document.getElementById('mStep2').style.display = 'none';
+  document.getElementById('mStep3').style.display = 'none';
+  document.getElementById('mhtInput').value = '';
+  // 변수 감지 패널 초기화
+  const vp = document.getElementById('bodyVarPanel');
+  if (vp) vp.style.display = 'none';
+  document.getElementById('tplModal').classList.add('open');
+}
+function closeTplModal() { document.getElementById('tplModal').classList.remove('open'); }
+function showStep3() {
+  document.getElementById('mStep1').style.display = 'none';
+  document.getElementById('mStep2').style.display = 'none';
+  document.getElementById('mStep3').style.display = 'block';
+  // 본문 템플릿 textarea에 공통 스타일 자동 적용 (WYSIWYG 느낌)
+  const ta = document.getElementById('m_body');
+  if (ta) {
+    ta.style.fontFamily  = S.cfg.font  || 'Malgun Gothic';
+    ta.style.fontSize    = S.cfg.fsize || '12pt';
+    ta.style.lineHeight  = S.cfg.lh    || '200%';
+  }
+  // 변수 감지 실행
+  setTimeout(detectBodyVars, 50);
+}
+function showStep3Direct() { S.editMode = false; renderMFields(); showStep3(); }
+
+// 템플릿 등록 방식 탭 전환
+function switchRegTab(idx) {
+  [0,1,2].forEach(i => {
+    document.getElementById('regTab' + i)?.classList.toggle('on', i === idx);
+    document.getElementById('regPane' + i).style.display = i === idx ? 'block' : 'none';
+  });
+}
+
+// MHT 파일 처리 + AI 분석 (B단계)
+// 텍스트 붙여넣기 → AI 분석
+async function handlePaste() {
+  const text = document.getElementById('pasteText').value.trim();
+  if (!text) { alert('문서 내용을 붙여넣어 주세요.'); return; }
+  // Step1 숨기고 분석 중 표시
+  document.getElementById('mStep1').style.display = 'none';
+  document.getElementById('mStep2').style.display = 'block';
+  await analyzeDocText(text.slice(0, 3500));
+}
+
+// 공통 텍스트 분석 함수 (MHT/붙여넣기 공용)
+async function analyzeDocText(clean) {
+  const guide = S.cfg.guide || '';
+  const prompt = `${guide}
+
+위 가이드를 참고하여 다음 결재문서 텍스트를 분석하고 JSON 형식으로만 응답하세요. 마크다운 없이 JSON만.
+
+문서:
+${clean}
+
+응답 형식:
+{
+  "docName": "문서명",
+  "titleTemplate": "제목 패턴 (변동부분 {{변수키}})",
+  "fields": [
+    {"key":"키명", "label":"표시명", "type":"text|amount|calc", "placeholder":"힌트", "formula":"", "autoFill":true}
+  ],
+  "bodyTemplate": "본문 (표는 [TABLE:이름]\n헤더|컬럼\n[/TABLE], AI분석위치 [AI_ANALYSIS], 계좌 {{cfg_bank}} {{cfg_account}} {{cfg_depositor}}, 담당자 {{cfg_contact}}, 붙임연월 {{붙임연월}})"
+}
+
+규칙:
+- 매월 바뀌는 값(날짜, 금액, 인원)만 변수로 처리
+- 날짜·청구연월·청구기간·세금계산서일 등 → autoFill:false
+- 인원·전월금액 등 잘 안바뀌는 값 → autoFill:true
+- 부가세=공급가액*0.1, 차액=당월-전월 등은 type:calc
+- 고정 텍스트는 본문에 그대로 유지`;
+
+  try {
+    const resp = await fetch('/api/claude', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 4000,
+        messages: [{ role: 'user', content: prompt }] })
+    });
+    const data = await resp.json();
+    const txt = (data.content?.[0]?.text || '').replace(/```json\n?|```\n?/g, '').trim();
+    const parsed = JSON.parse(txt);
+    document.getElementById('m_name').value     = parsed.docName || '';
+    document.getElementById('m_titleTpl').value = parsed.titleTemplate || '';
+    document.getElementById('m_body').value     = parsed.bodyTemplate || '';
+    mFields = parsed.fields || [];
+  } catch {
+    document.getElementById('m_name').value = '새 문서';
+    mFields = [{ key:'청구연월', label:'청구 연월', type:'text', placeholder:'예: 26년6월', formula:'', autoFill:false }];
+  }
+  renderMFields();
+  showStep3();
+}
+
+async function handleMHT(file) {
+  if (!file) return;
+  document.getElementById('mStep1').style.display = 'none';
+  document.getElementById('mStep2').style.display = 'block';
+
+  try {
+    // MHT 전체를 서버로 전송 → Base64/QP 서버에서 디코드
+    const raw  = await file.text();
+    const resp = await fetch('/api/claude', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type: 'parse_mht', content: raw })
+    });
+    if (!resp.ok) throw new Error('서버 파싱 실패');
+    const { clean } = await resp.json();
+    if (!clean || clean.length < 10) throw new Error('파싱 결과 없음');
+    await analyzeDocText(clean);
+  } catch(e) {
+    // fallback: 브라우저 QP 파싱
+    console.warn('서버 파싱 실패, 브라우저 재시도:', e);
+    const raw     = await file.text();
+    const decoded = raw.replace(/=\r?\n/g,'').replace(/=([0-9A-Fa-f]{2})/g,(_,h)=>String.fromCharCode(parseInt(h,16)));
+    const clean   = decoded
+      .replace(/<style[^>]*>[\s\S]*?<\/style>/gi,'')
+      .replace(/<script[^>]*>[\s\S]*?<\/script>/gi,'')
+      .replace(/<[^>]+>/g,' ').replace(/&nbsp;/g,' ')
+      .replace(/[ \t]+/g,' ').replace(/\n{3,}/g,'\n\n').trim().slice(0,3500);
+    await analyzeDocText(clean);
+  }
+  if (!document.getElementById('m_name').value) {
+    document.getElementById('m_name').value = file.name.replace(/\.mh[lt]l?$/i, '');
+  }
+}
+
+// 모달 필드 목록 렌더
+function renderMFields() {
+  document.getElementById('m_fieldList').innerHTML = mFields.map((f, i) => {
+    // calc 타입은 자동계산이므로 자동채움 체크박스 비활성화
+    const isCalc = f.type === 'calc';
+    // autoFill 미설정 필드는 기본값 true (하위호환)
+    const checked = isCalc ? false : (f.autoFill !== false);
+    const chk = isCalc
+      ? `<span style="display:flex;justify-content:center;color:var(--t3);font-size:11px;">—</span>`
+      : `<label style="display:flex;justify-content:center;align-items:center;cursor:pointer;">
+           <input type="checkbox" ${checked ? 'checked' : ''}
+             onchange="mFields[${i}].autoFill=this.checked"
+             style="width:15px;height:15px;cursor:pointer;">
+         </label>`;
+    return `<div class="field-editor-grid">
+      <input type="text" placeholder="필드 키" value="${f.key}"
+        oninput="mFields[${i}].key=this.value" style="font-size:12px;">
+      <input type="text" placeholder="표시명" value="${f.label}"
+        oninput="mFields[${i}].label=this.value" style="font-size:12px;">
+      <select onchange="mFields[${i}].type=this.value;renderMFields()" style="font-size:12px;">
+        <option value="text"   ${f.type==='text'  ?'selected':''}>텍스트</option>
+        <option value="amount" ${f.type==='amount'?'selected':''}>금액</option>
+        <option value="calc"   ${f.type==='calc'  ?'selected':''}>자동계산</option>
+      </select>
+      <input type="text"
+        placeholder="${f.type==='calc' ? '수식 예: 당월공급가액*0.1' : '입력 힌트'}"
+        value="${f.type==='calc' ? (f.formula||'') : (f.placeholder||'')}"
+        oninput="mFields[${i}].${f.type==='calc'?'formula':'placeholder'}=this.value"
+        style="font-size:12px;">
+      ${chk}
+      <button class="btn danger sm" onclick="mFields.splice(${i},1);renderMFields()">✕</button>
+    </div>`;
+  }).join('');
+}
+function addMField() {
+  mFields.push({ key:'', label:'', type:'text', placeholder:'', formula:'', autoFill:true });
+  renderMFields();
+}
+
+// 템플릿 저장 (신규 + 수정 통합)
+// 본문에서 {{변수}} 감지 → 클릭으로 필드 자동추가
+function detectBodyVars() {
+  const body  = document.getElementById('m_body')?.value  || '';
+  const title = document.getElementById('m_titleTpl')?.value || '';
+  const combined = body + ' ' + title;
+
+  // {{변수명}} 패턴 추출 (cfg_ 시스템 변수 제외)
+  const matches = [...combined.matchAll(/\{\{([^}]+)\}\}/g)]
+    .map(m => m[1].trim())
+    .filter(k => !k.startsWith('cfg_') && k !== '붙임연월');
+  const unique = [...new Set(matches)];
+
+  // 이미 필드로 등록된 키
+  const registered = new Set(mFields.map(f => f.key));
+
+  const panel   = document.getElementById('bodyVarPanel');
+  const listEl  = document.getElementById('bodyVarList');
+  if (!unique.length) { panel.style.display = 'none'; return; }
+
+  panel.style.display = 'block';
+  listEl.innerHTML = unique.map(key => {
+    const exists = registered.has(key);
+    return `<span onclick="${exists ? '' : `quickAddField('${key}')`}"
+      style="display:inline-flex;align-items:center;gap:4px;
+        padding:4px 10px;border-radius:20px;font-size:11px;font-weight:600;cursor:${exists?'default':'pointer'};
+        background:${exists ? 'var(--green-bg)' : 'var(--blue-bg)'};
+        color:${exists ? 'var(--green-t)' : 'var(--blue-t)'};
+        border:1px solid ${exists ? 'rgba(10,122,84,.2)' : 'rgba(24,96,196,.2)'};
+        transition:opacity .12s;" ${exists ? '' : 'title="클릭하면 필드로 추가"'}
+        onmouseover="if(!${exists})this.style.opacity='.7'"
+        onmouseout="this.style.opacity='1'">
+      ${exists
+        ? `<svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5" style="width:10px;height:10px;"><polyline points="20 6 9 17 4 12"/></svg>`
+        : `<svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5" style="width:10px;height:10px;"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>`}
+      ${key}
+    </span>`;
+  }).join('');
+}
+
+// 클릭으로 필드 빠른 추가 — 타입 자동 추론
+function quickAddField(key) {
+  // 타입 자동 추론 규칙
+  let type = 'text', placeholder = '', formula = '', autoFill = true;
+  if (/공급가액|금액|수수료|도급비|청구액/.test(key)) {
+    type = 'amount'; placeholder = '숫자만 입력';
+  } else if (/부가세/.test(key)) {
+    type = 'calc'; formula = key.replace('부가세','') + '공급가액*0.1';
+    if (!formula.startsWith('당월')) formula = '당월공급가액*0.1';
+  } else if (/차액|차이|증감/.test(key)) {
+    type = 'calc'; formula = '당월공급가액-전월공급가액';
+  } else if (/합계|합산|총액|청구총액/.test(key)) {
+    type = 'calc'; formula = '당월공급가액+부가세';
+  } else if (/연월|기간|날짜|일자|일$/.test(key)) {
+    autoFill = false;  // 날짜류는 매번 새로 입력
+  } else if (/인원|명수|수$/.test(key)) {
+    placeholder = '예: 62명';
+  }
+
+  mFields.push({ key, label: key, type, placeholder, formula, autoFill });
+  renderMFields();
+  detectBodyVars(); // 등록 상태 즉시 반영
+  gToast(`"${key}" 필드 추가됨`);
+}
+
+function saveTpl() {
+  const name     = document.getElementById('m_name').value.trim();
+  const centerId = document.getElementById('m_center').value;
+  const deadline = document.getElementById('m_deadline').value.trim();
+  const body     = document.getElementById('m_body').value.trim();
+  const titleTpl = document.getElementById('m_titleTpl').value.trim();
+  if (!name) { alert('문서명을 입력하세요.'); return; }
+  const dd = parseInt((deadline.match(/(\d+)일/) || [])[1]) || 0;
+
+  if (S.editMode && S.curTplId) {
+    // 수정 모드: 기존 템플릿 업데이트
+    const idx = S.templates.findIndex(t => t.id === S.curTplId);
+    if (idx >= 0) {
+      S.templates[idx] = {
+        ...S.templates[idx], name, centerId, deadline, deadlineDay: dd,
+        titleTemplate: titleTpl || name + '({{청구연월}})',
+        bodyTemplate: body, fields: mFields.map(f => ({ ...f }))
+      };
+    }
+    gToast('템플릿 수정됨');
+  } else {
+    // 신규 등록
+    S.templates.push({
+      id: 't' + Date.now(), name, centerId, deadline, deadlineDay: dd,
+      createdAt: new Date().toISOString().slice(0, 10),
+      titleTemplate: titleTpl || name + '({{청구연월}})',
+      bodyTemplate: body, fields: mFields.map(f => ({ ...f }))
+    });
+    gToast('템플릿 등록됨');
+  }
+  persist(); renderTplList(); closeTplModal();
+  // 현재 작업 중인 템플릿이면 화면 갱신
+  if (S.curTplId) { renderFields(); updatePreview(); }
+}
+
+// ══ 설정 모달 ══
+function openSettings() {
+  loadCfg(); renderCenterMgr();
+  // 가이드 초기 로드
+  const gEl = document.getElementById('c_guide');
+  if (gEl) gEl.value = S.cfg.guide || '';
+  document.getElementById('settingsModal').classList.add('open');
+}
+function closeSettings() { document.getElementById('settingsModal').classList.remove('open'); }
+
+function switchStab(idx) {
+  // 설정 모달 전용 클래스(s-stab)만 선택 → 다른 모달 탭과 충돌 없음
+  const modal = document.getElementById('settingsModal');
+  modal.querySelectorAll('.s-stab').forEach((el, i) => el.classList.toggle('on', i === idx));
+  modal.querySelectorAll('.s-stab-pane').forEach((el, i) => el.classList.toggle('on', i === idx));
+  // 센터 관리 탭 열릴 때 목록 갱신
+  if (idx === 1) renderCenterMgr();
+  // 가이드 탭(2) / 백업복원 탭(3) 열릴 때 처리
+  if (idx === 2) {
+    const el = document.getElementById('c_guide');
+    if (el) el.value = S.cfg.guide || '';
+  }
+}
+
+function loadCfg() {
+  const map = { font:'c_font', fsize:'c_fsize', tfsize:'c_tfsize', lh:'c_lh', bpx:'c_bpx' };
+  Object.entries(map).forEach(([k, id]) => {
+    const el = document.getElementById(id); if (el) el.value = S.cfg[k] || '';
+  });
+  // 가이드 탭 textarea
+  const gEl = document.getElementById('c_guide');
+  if (gEl) gEl.value = S.cfg.guide || '';
+}
+function saveCfg() {
+  const map = { font:'c_font', fsize:'c_fsize', tfsize:'c_tfsize', lh:'c_lh', bpx:'c_bpx' };
+  Object.entries(map).forEach(([k, id]) => {
+    const el = document.getElementById(id); if (el) S.cfg[k] = el.value;
+  });
+  persist(); gToast('설정 저장됨');
+  if (S.curTplId) updatePreview(); // 스타일 즉시 반영
+}
+
+// 공통 가이드 저장
+function saveGuide() {
+  const el = document.getElementById('c_guide');
+  if (el) S.cfg.guide = el.value;
+  persist(); gToast('공통 가이드 저장됨');
+}
+// 공통 가이드 기본값 초기화
+const DEFAULT_GUIDE = `당신은 KTIS 사내 공문서 작성 전문 어시스턴트입니다.
+문서 작성 요청이 들어오면 아래 KTIS 공통 작성 가이드를 반드시 적용하세요.
+
+[공통 서식 기준]
+- 폰트: 맑은 고딕 / 폰트 크기: 12p / 줄간격: 200%
+
+[1] 날짜 표기 규칙
+- 본문 날짜: 연월일 사이에 마침표(.) 표기, 한 자리 숫자도 앞에 0 붙이지 않음
+  예) 2025.8.19. / 2025.6.8.
+- 연도 축약 시: 작은따옴표(') 사용  예) '25년
+
+[2] 항목 기호 및 들여쓰기
+- 1단계: 1., 2. / 2단계: 가., 나. / 3단계: ○ 또는 1), 2)
+- 4단계: - 또는 가), 나) / 5단계: · / 6단계: ··
+- 들여쓰기: 1단계 2칸, 이하 2타씩 이동
+
+[3] 관련 문서: 문서번호(날짜) 제목 순 / 제목 생략 금지
+
+[4] 붙임 자료
+- 1개: 붙임: 제목 1부.  끝.
+- 2개 이상: 번호 구분, 마지막에 끝.
+
+[5] 마무리: 반드시 '끝.' (2칸 띄우고 표기)
+
+[6] 주의: 제목 축약 금지 / 글자 크기·간격 임의 조정 금지`;
+
+function resetGuide() {
+  if (!confirm('기본값으로 초기화하시겠습니까?')) return;
+  S.cfg.guide = DEFAULT_GUIDE;
+  const el = document.getElementById('c_guide');
+  if (el) el.value = DEFAULT_GUIDE;
+  persist(); gToast('가이드 초기화됨');
+}
+
+function renderCenterMgr() {
+  document.getElementById('centerMgrList').innerHTML = S.centers.map(c => {
+    const d = c.defaults || {};
+    const cid = c.id;
+    return `<div data-center-id="${cid}" style="border:1px solid var(--border);border-radius:var(--r);padding:13px 15px;margin-bottom:10px;">
+      <!-- 센터 헤더: 센터명 + 색상 + 저장 + 삭제 -->
+      <div class="flex items-center gap8" style="margin-bottom:10px;">
+        <div id="cdot_${cid}" style="width:10px;height:10px;border-radius:50%;background:${c.color};flex-shrink:0;"></div>
+        <input type="text" id="cname_${cid}" value="${c.name}"
+          style="flex:1;padding:5px 8px;border:1px solid var(--border2);border-radius:var(--r-sm);font-size:13px;font-weight:600;font-family:inherit;outline:none;"
+          onkeydown="if(event.key==='Enter')saveCenterRow('${cid}')">
+        <input type="color" id="ccolor_${cid}" value="${c.color}"
+          onchange="document.getElementById('cdot_${cid}').style.background=this.value"
+          title="색상 변경" style="width:26px;height:26px;border:1px solid var(--border2);border-radius:4px;cursor:pointer;padding:1px;">
+        <button class="btn blue sm" onclick="saveCenterRow('${cid}')">저장</button>
+        <button class="btn danger sm del-btn" onclick="delCenter('${cid}')">삭제</button>
+      </div>
+      <!-- 센터별 기본값 -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+        <div>
+          <div class="flabel" style="margin-bottom:3px;">담당자 <span class="fs11 tc3" style="font-weight:400;">(미입력 시 공통값)</span></div>
+          <input type="text" id="cd_contact_${cid}" value="${d.contact||''}" placeholder="${S.cfg.contact||''}"
+            style="font-size:12px;">
+        </div>
+        <div>
+          <div class="flabel" style="margin-bottom:3px;">예금주 <span class="fs11 tc3" style="font-weight:400;">(미입력 시 공통값)</span></div>
+          <input type="text" id="cd_depositor_${cid}" value="${d.depositor||''}" placeholder="${S.cfg.depositor||''}"
+            style="font-size:12px;">
+        </div>
+        <div>
+          <div class="flabel" style="margin-bottom:3px;">은행명</div>
+          <input type="text" id="cd_bank_${cid}" value="${d.bank||''}" placeholder="${S.cfg.bank||''}"
+            style="font-size:12px;">
+        </div>
+        <div>
+          <div class="flabel" style="margin-bottom:3px;">계좌번호</div>
+          <input type="text" id="cd_account_${cid}" value="${d.account||''}" placeholder="${S.cfg.account||''}"
+            style="font-size:12px;">
+        </div>
+      </div>
+      <div style="margin-top:8px;text-align:right;">
+        <button class="btn blue sm" onclick="saveCenterRow('${cid}')">
+          변경사항 저장
+        </button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// 센터 행 전체 저장 (이름 + 색상 + 기본값 한번에)
+function saveCenterRow(id) {
+  const c = S.centers.find(x => x.id === id);
+  if (!c) return;
+  const name  = document.getElementById('cname_' + id)?.value.trim();
+  const color = document.getElementById('ccolor_' + id)?.value || c.color;
+  if (!name) { gToast('센터명을 입력하세요'); return; }
+  c.name  = name;
+  c.color = color;
+  // 기본값
+  if (!c.defaults) c.defaults = {};
+  ['contact','depositor','bank','account'].forEach(k => {
+    const v = document.getElementById(`cd_${k}_${id}`)?.value.trim() || '';
+    if (v) c.defaults[k] = v;
+    else   delete c.defaults[k];
+  });
+  persist();
+  renderCenterTabs();
+  renderTplList();
+  renderHistList();
+  // 색상 점 즉시 반영
+  const dot = document.getElementById('cdot_' + id);
+  if (dot) dot.style.background = color;
+  gToast(`"${name}" 저장됨`);
+}
+
+// 센터별 기본값 업데이트
+function updCenterDefault(centerId, key, val) {
+  const c = S.centers.find(x => x.id === centerId);
+  if (!c) return;
+  if (!c.defaults) c.defaults = {};
+  // 빈 값 입력 시 해당 키 삭제 → 공통값으로 fallback
+  if (val.trim()) c.defaults[key] = val.trim();
+  else delete c.defaults[key];
+  persist();
+  // 현재 작업 중인 문서가 이 센터면 미리보기 즉시 갱신
+  const cur = S.templates.find(t => t.id === S.curTplId);
+  if (cur && cur.centerId === centerId) updatePreview();
+}
+// ══ 센터 수정 팝업 ══
+function openCenterEdit(id) {
+  const c = S.centers.find(x => x.id === id);
+  if (!c) return;
+  const d = c.defaults || {};
+  document.getElementById('cedit_id').value        = id;
+  document.getElementById('cedit_name').value      = c.name;
+  document.getElementById('cedit_color').value     = c.color;
+  document.getElementById('cedit_contact').value   = d.contact   || '';
+  document.getElementById('cedit_depositor').value = d.depositor || '';
+  document.getElementById('cedit_bank').value      = d.bank      || '';
+  document.getElementById('cedit_account').value   = d.account   || '';
+  document.getElementById('centerEditPopup').style.display = 'block';
+}
+function closeCenterEdit() {
+  document.getElementById('centerEditPopup').style.display = 'none';
+}
+function saveCenterEdit() {
+  const id    = document.getElementById('cedit_id').value;
+  const name  = document.getElementById('cedit_name').value.trim();
+  const color = document.getElementById('cedit_color').value;
+  if (!name) { gToast('센터명을 입력하세요'); return; }
+  const c = S.centers.find(x => x.id === id);
+  if (!c) return;
+  c.name = name; c.color = color;
+  if (!c.defaults) c.defaults = {};
+  ['contact','depositor','bank','account'].forEach(k => {
+    const v = document.getElementById('cedit_' + k)?.value.trim() || '';
+    if (v) c.defaults[k] = v; else delete c.defaults[k];
+  });
+  persist(); renderCenterTabs(); renderTplList(); renderHistList();
+  if (document.getElementById('centerMgrList')?.children.length) renderCenterMgr();
+  closeCenterEdit();
+  gToast(`"${name}" 저장됨`);
+}
+function delCenterFromEdit() {
+  const id = document.getElementById('cedit_id').value;
+  if (S.templates.some(t => t.centerId === id)) {
+    gToast('이 센터를 사용하는 템플릿이 있습니다'); return;
+  }
+  S.centers = S.centers.filter(x => x.id !== id);
+  persist(); renderCenterTabs(); renderTplList(); renderHistList();
+  closeCenterEdit(); gToast('센터 삭제됨');
+}
+document.addEventListener('click', e => {
+  const popup = document.getElementById('centerEditPopup');
+  if (popup?.style.display !== 'none' && !popup.contains(e.target) && !e.target.closest('.ctab'))
+    closeCenterEdit();
+});
+
+// ══ 템플릿 센터 이동 ══
+function moveTplCenter(tplId, newCenterId) {
+  const t = S.templates.find(x => x.id === tplId);
+  if (!t) return;
+  t.centerId = newCenterId;
+  persist(); renderTplList(); saveTplToSupabase(t);
+  gToast(`"${t.name}" → ${cn(newCenterId)} 이동됨`);
+}
+
+// 센터 추가 — 상단바 인라인 방식
+function showCenterAddInline() {
+  document.getElementById('centerAddInline').style.display = 'flex';
+  document.getElementById('newCenterNameTop').value = '';
+  document.getElementById('newCenterNameTop').focus();
+}
+function confirmCenterAdd() {
+  const name  = document.getElementById('newCenterNameTop').value.trim();
+  const color = document.getElementById('newCenterColorTop').value || '#1860C4';
+  if (!name) { document.getElementById('newCenterNameTop').focus(); return; }
+  S.centers.push({ id: 'c' + Date.now(), name, color });
+  persist();
+  renderCenterTabs();   // 상단 탭 갱신
+  renderTplList();      // 좌측 목록 갱신
+  renderHistList();     // 이력 필터 갱신
+  if (document.getElementById('centerMgrList').innerHTML) renderCenterMgr(); // 설정창 열려 있으면
+  cancelCenterAdd();
+  gToast('센터 추가됨: ' + name);
+}
+function cancelCenterAdd() {
+  document.getElementById('centerAddInline').style.display = 'none';
+}
+// 설정 모달 내 센터 추가
+function showCenterAddInModal() {
+  document.getElementById('centerAddModal').style.display = 'block';
+  document.getElementById('newCenterNameModal').value = '';
+  document.getElementById('newCenterNameModal').focus();
+}
+function confirmCenterAddModal() {
+  const name  = document.getElementById('newCenterNameModal').value.trim();
+  const color = document.getElementById('newCenterColorModal').value || '#1860C4';
+  if (!name) { document.getElementById('newCenterNameModal').focus(); return; }
+  S.centers.push({ id: 'c' + Date.now(), name, color });
+  persist();
+  renderCenterMgr();    // 설정 모달 목록 갱신
+  renderCenterTabs();   // 상단 탭 갱신
+  renderTplList();
+  renderHistList();
+  cancelCenterAddModal();
+  gToast('센터 추가됨: ' + name);
+}
+function cancelCenterAddModal() {
+  document.getElementById('centerAddModal').style.display = 'none';
+}
+// 상단바 인라인 추가 호환
+function addCenter() { showCenterAddInline(); }
+function updCenter(id, name) {
+  const c = S.centers.find(x => x.id === id);
+  if (c) { c.name = name; persist(); renderCenterTabs(); renderTplList(); renderHistList(); }
+}
+function updCenterColor(id, color) {
+  const c = S.centers.find(x => x.id === id);
+  if (c) { c.color = color; persist(); renderCenterMgr(); renderCenterTabs(); renderTplList(); }
+}
+function delCenter(id) {
+  if (S.templates.some(t => t.centerId === id)) {
+    gToast('이 센터를 사용하는 템플릿이 있습니다'); return;
+  }
+  // confirm 대신 인라인 확인 버튼으로 처리 (모달 위 confirm 차단 문제 방지)
+  const row = document.querySelector(`[data-center-id="${id}"]`);
+  if (row && !row.dataset.confirming) {
+    row.dataset.confirming = '1';
+    const btn = row.querySelector('.del-btn');
+    if (btn) {
+      btn.textContent = '확인 삭제';
+      btn.style.background = 'var(--red-t)';
+      btn.style.color = '#fff';
+      // 3초 후 원상복구
+      setTimeout(() => {
+        if (row.dataset.confirming) {
+          delete row.dataset.confirming;
+          btn.textContent = '삭제';
+          btn.style.background = '';
+          btn.style.color = '';
+        }
+      }, 3000);
+    }
+    return;
+  }
+  // 두 번째 클릭: 실제 삭제
+  S.centers = S.centers.filter(c => c.id !== id);
+  persist(); renderCenterMgr(); renderCenterTabs(); renderTplList(); renderHistList();
+  gToast('센터 삭제됨');
+}
+
+// ══ 초기화 ══
+hydrate();
+renderCenterTabs();
+renderTplList();
+renderHistList();
+// Supabase에서 최신 데이터 로드 (로컬보다 최신이면 덮어씀)
+loadFromSupabase().then(() => {
+  renderCenterTabs();
+  renderTplList();
+  renderHistList();
+  updateHistoryBadge();
+  renderDday();
+});
+
+// 입력 이벤트 리스너 (extraInput, aiDraft는 동적 요소)
+document.getElementById('extraInput').addEventListener('input', updatePreview);
+document.getElementById('aiDraft').addEventListener('input', updatePreview);
 </script>
 </body>
 </html>
