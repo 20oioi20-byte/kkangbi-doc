@@ -1270,30 +1270,20 @@ let S = {
 };
 
 // ── 저장/불러오기 ──
-// ── Supabase 연동 설정 ──
-const SB_URL  = 'https://zbiwyqwjehnogxkzlhxx.supabase.co';
-const SB_KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpiaXd5cXdqZWhub2d4a3psaHh4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEwOTQ1MzYsImV4cCI6MjA5NjY3MDUzNn0.SQJjHnDcMTRyElxtY9E-04yIkzPVF35L8hcx0lSyG48';
-const SB_HDR  = {'Content-Type':'application/json','apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY};
-
-async function sbGet(table, query='') {
-  const r = await fetch(`${SB_URL}/rest/v1/${table}?${query}`,{headers:SB_HDR});
-  return r.ok ? r.json() : [];
-}
-async function sbPost(table, body) {
-  const r = await fetch(`${SB_URL}/rest/v1/${table}`,{
-    method:'POST', headers:{...SB_HDR,'Prefer':'return=representation'}, body:JSON.stringify(body)
+// ── Supabase 연동 — Vercel API 프록시 경유 (CORS 완전 해결) ──
+async function sbCall(method, table, query='', body=null) {
+  const r = await fetch('/api/supabase', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ method, table, query, body })
   });
-  return r.ok ? r.json() : null;
+  if (!r.ok) return method === 'GET' ? [] : null;
+  return r.json();
 }
-async function sbPatch(table, query, body) {
-  const r = await fetch(`${SB_URL}/rest/v1/${table}?${query}`,{
-    method:'PATCH', headers:{...SB_HDR,'Prefer':'return=representation'}, body:JSON.stringify(body)
-  });
-  return r.ok ? r.json() : null;
-}
-async function sbDelete(table, query) {
-  await fetch(`${SB_URL}/rest/v1/${table}?${query}`,{method:'DELETE',headers:SB_HDR});
-}
+const sbGet    = (table, query='')         => sbCall('GET',    table, query);
+const sbPost   = (table, body)             => sbCall('POST',   table, '',    body);
+const sbPatch  = (table, query, body)      => sbCall('PATCH',  table, query, body);
+const sbDelete = (table, query)            => sbCall('DELETE', table, query);
 
 // ── 로컬 저장 (즉시 반응용) + Supabase 백그라운드 동기화 ──
 function persist() {
@@ -2290,21 +2280,30 @@ async function handleMHT(file) {
   document.getElementById('mStep1').style.display = 'none';
   document.getElementById('mStep2').style.display = 'block';
 
-  // MHT에서 순수 텍스트 추출 (quoted-printable 디코드 + HTML 태그 제거)
-  const raw     = await file.text();
-  let decoded   = raw.replace(/=\r?\n/g, '').replace(/=([0-9A-Fa-f]{2})/g, (_, h) => String.fromCharCode(parseInt(h, 16)));
-  let clean     = decoded
-    .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
-    .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
-    .replace(/<[^>]+>/g, ' ')
-    .replace(/&nbsp;/g, ' ')
-    .replace(/[ 	]+/g, ' ')
-    .replace(/\n{3,}/g, '\n\n')
-    .trim()
-    .slice(0, 3500);
-
-  // 공통 analyzeDocText로 분석 (가이드 자동 포함)
-  await analyzeDocText(clean);
+  try {
+    // MHT 전체를 서버로 전송 → Base64/QP 서버에서 디코드
+    const raw  = await file.text();
+    const resp = await fetch('/api/claude', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type: 'parse_mht', content: raw })
+    });
+    if (!resp.ok) throw new Error('서버 파싱 실패');
+    const { clean } = await resp.json();
+    if (!clean || clean.length < 10) throw new Error('파싱 결과 없음');
+    await analyzeDocText(clean);
+  } catch(e) {
+    // fallback: 브라우저 QP 파싱
+    console.warn('서버 파싱 실패, 브라우저 재시도:', e);
+    const raw     = await file.text();
+    const decoded = raw.replace(/=\r?\n/g,'').replace(/=([0-9A-Fa-f]{2})/g,(_,h)=>String.fromCharCode(parseInt(h,16)));
+    const clean   = decoded
+      .replace(/<style[^>]*>[\s\S]*?<\/style>/gi,'')
+      .replace(/<script[^>]*>[\s\S]*?<\/script>/gi,'')
+      .replace(/<[^>]+>/g,' ').replace(/&nbsp;/g,' ')
+      .replace(/[ \t]+/g,' ').replace(/\n{3,}/g,'\n\n').trim().slice(0,3500);
+    await analyzeDocText(clean);
+  }
   if (!document.getElementById('m_name').value) {
     document.getElementById('m_name').value = file.name.replace(/\.mh[lt]l?$/i, '');
   }
