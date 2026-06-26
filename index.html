@@ -2149,6 +2149,14 @@ document.addEventListener('paste', e => {
   handleImgPaste(e);
 });
 
+// 이력 뱃지 업데이트
+function updateHistoryBadge() {
+  const b = document.getElementById('histBadge');
+  if (!b) return;
+  b.textContent = S.history.length;
+  b.style.display = S.history.length ? 'inline-flex' : 'none';
+}
+
 // ══ 전역 토스트 ══
 function gToast(msg) {
   const el = document.getElementById('gToast');
