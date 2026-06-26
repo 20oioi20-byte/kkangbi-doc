@@ -639,6 +639,35 @@ textarea { resize: vertical; min-height: 64px; line-height: 1.65; }
           color:var(--t2);font-size:11px;cursor:pointer;">✕</button>
     </div>
   </div>
+  <!-- 센터 수정 미니모달 -->
+  <div id="centerEditPopup" style="display:none;position:fixed;top:58px;left:50%;transform:translateX(-50%);
+    background:var(--surface);border:1px solid var(--border2);border-radius:var(--r-lg);
+    padding:18px 20px;z-index:300;box-shadow:0 8px 32px rgba(0,0,0,.18);min-width:320px;">
+    <div style="font-size:13px;font-weight:700;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between;">
+      센터 수정
+      <button class="btn sm" onclick="closeCenterEdit()">✕</button>
+    </div>
+    <div class="fg">
+      <div class="flabel">센터명</div>
+      <input type="text" id="cedit_name" style="margin-bottom:8px;">
+    </div>
+    <div class="fg" style="display:flex;gap:8px;align-items:center;">
+      <div style="flex:1;">
+        <div class="flabel">색상</div>
+        <input type="color" id="cedit_color" style="width:100%;height:34px;border:1px solid var(--border2);border-radius:var(--r-sm);cursor:pointer;padding:2px;">
+      </div>
+    </div>
+    <div class="divider"></div>
+    <div class="fg"><div class="flabel">담당자</div><input type="text" id="cedit_contact" placeholder="미입력 시 공통값"></div>
+    <div class="fg"><div class="flabel">예금주</div><input type="text" id="cedit_depositor" placeholder="미입력 시 공통값"></div>
+    <div class="fg"><div class="flabel">은행명</div><input type="text" id="cedit_bank" placeholder="미입력 시 공통값"></div>
+    <div class="fg"><div class="flabel">계좌번호</div><input type="text" id="cedit_account" placeholder="미입력 시 공통값"></div>
+    <input type="hidden" id="cedit_id">
+    <div style="display:flex;gap:8px;margin-top:14px;justify-content:flex-end;">
+      <button class="btn danger sm" onclick="delCenterFromEdit()">센터 삭제</button>
+      <button class="btn solid" onclick="saveCenterEdit()">저장</button>
+    </div>
+  </div>
   <div class="topbar-right">
     <div class="search-wrap">
       <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -1328,7 +1357,11 @@ async function loadFromSupabase() {
     const cfg = await sbGet('doc_config','id=eq.1&select=*');
     if (cfg?.[0]) {
       if (cfg[0].centers?.length) S.centers = cfg[0].centers;
-      if (cfg[0].cfg) Object.assign(S.cfg, cfg[0].cfg);
+      if (cfg[0].cfg) {
+        Object.assign(S.cfg, cfg[0].cfg);
+        // guide가 비어있으면 DEFAULT_GUIDE 사용 (Supabase에 저장 안 된 경우)
+        if (!S.cfg.guide) S.cfg.guide = DEFAULT_GUIDE;
+      }
     }
     // 템플릿
     const tpls = await sbGet('doc_templates','select=*&order=created_at.asc');
@@ -1404,7 +1437,7 @@ async function delHistFromSupabase(id) {
 }
 
 // ── 헬퍼 ──
-const cn  = id => S.centers.find(c => c.id === id)?.name  || id;
+const cn  = id => !id ? '기본문서' : (S.centers.find(c => c.id === id)?.name || '기본문서');
 const cc  = id => S.centers.find(c => c.id === id)?.color || '#888';
 const fmt = n  => (n === '' || n == null) ? '' : Number(n).toLocaleString('ko-KR');
 // 금액 키 판별: 액·금·총액·부가세·가액 포함
@@ -1414,9 +1447,17 @@ const curTpl = () => S.templates.find(t => t.id === S.curTplId);
 // ══ 센터 탭 렌더 ══
 function renderCenterTabs() {
   const el = document.getElementById('centerTabs');
-  const all = `<div class="ctab ${S.activeCenter === 'all' ? 'on' : ''}" onclick="setCenter('all')">전체</div>`;
+  const all = [
+    `<div class="ctab ${S.activeCenter === 'all' ? 'on' : ''}" onclick="setCenter('all')">전체</div>`,
+    `<div class="ctab ${S.activeCenter === '__default__' ? 'on' : ''}" onclick="setCenter('__default__')">
+       <div class="ctab-dot" style="background:#888"></div>기본문서
+     </div>`
+  ].join('');
   const tabs = S.centers.map(c =>
-    `<div class="ctab ${S.activeCenter === c.id ? 'on' : ''}" onclick="setCenter('${c.id}')">
+    `<div class="ctab ${S.activeCenter === c.id ? 'on' : ''}"
+       onclick="setCenter('${c.id}')"
+       ondblclick="openCenterEdit('${c.id}')"
+       title="더블클릭: 센터 수정">
        <div class="ctab-dot" style="background:${c.color}"></div>${c.name}
      </div>`
   ).join('');
@@ -1432,7 +1473,13 @@ function setCenter(id) {
 // ══ 템플릿 목록 (좌측 패널) ══
 function renderTplList(filter = '') {
   const list = S.templates.filter(t => {
-    const cok = S.activeCenter === 'all' || t.centerId === S.activeCenter;
+    const isDefault = S.activeCenter === '__default__';
+    // 기본문서: centerId가 없거나 센터 목록에 없는 템플릿
+    const cok = S.activeCenter === 'all'
+      ? true
+      : isDefault
+        ? !S.centers.find(c => c.id === t.centerId)
+        : t.centerId === S.activeCenter;
     const fok = !filter || t.name.includes(filter) || cn(t.centerId).includes(filter);
     return cok && fok;
   });
@@ -1454,15 +1501,29 @@ function renderTplList(filter = '') {
         ddayHtml = `<span class="tpl-dday ${cls}">D-${diff === 0 ? '0' : diff}</span>`;
       }
     }
+    // 센터 이동 드롭다운
+    const moveOpts = S.centers.map(c =>
+      `<option value="${c.id}" ${c.id===t.centerId?'selected':''}>${c.name}</option>`
+    ).join('');
     return `<div class="tpl-item ${isOn ? 'on' : ''}" onclick="loadTpl('${t.id}')">
-      <div class="tpl-item-left">
+      <div class="tpl-item-left" style="min-width:0;flex:1;">
         <div class="tpl-dot" style="background:${cc(t.centerId)}"></div>
         <div class="tpl-info">
           <div class="tpl-name">${t.name}</div>
           <div class="tpl-meta">${cn(t.centerId)}${t.deadline ? ' · ' + t.deadline : ''}</div>
         </div>
       </div>
-      ${ddayHtml}
+      <div style="display:flex;align-items:center;gap:4px;flex-shrink:0;">
+        ${ddayHtml}
+        <select onchange="moveTplCenter('${t.id}',this.value);event.stopPropagation()"
+          onclick="event.stopPropagation()"
+          title="센터 이동"
+          style="font-size:10px;padding:2px 4px;border:1px solid var(--border);
+            border-radius:var(--r-sm);background:var(--surface);color:var(--t2);
+            cursor:pointer;max-width:70px;">
+          ${moveOpts}
+        </select>
+      </div>
     </div>`;
   }).join('');
 }
@@ -2755,6 +2816,65 @@ function updCenterDefault(centerId, key, val) {
   const cur = S.templates.find(t => t.id === S.curTplId);
   if (cur && cur.centerId === centerId) updatePreview();
 }
+// ══ 센터 수정 팝업 ══
+function openCenterEdit(id) {
+  const c = S.centers.find(x => x.id === id);
+  if (!c) return;
+  const d = c.defaults || {};
+  document.getElementById('cedit_id').value        = id;
+  document.getElementById('cedit_name').value      = c.name;
+  document.getElementById('cedit_color').value     = c.color;
+  document.getElementById('cedit_contact').value   = d.contact   || '';
+  document.getElementById('cedit_depositor').value = d.depositor || '';
+  document.getElementById('cedit_bank').value      = d.bank      || '';
+  document.getElementById('cedit_account').value   = d.account   || '';
+  document.getElementById('centerEditPopup').style.display = 'block';
+}
+function closeCenterEdit() {
+  document.getElementById('centerEditPopup').style.display = 'none';
+}
+function saveCenterEdit() {
+  const id    = document.getElementById('cedit_id').value;
+  const name  = document.getElementById('cedit_name').value.trim();
+  const color = document.getElementById('cedit_color').value;
+  if (!name) { gToast('센터명을 입력하세요'); return; }
+  const c = S.centers.find(x => x.id === id);
+  if (!c) return;
+  c.name = name; c.color = color;
+  if (!c.defaults) c.defaults = {};
+  ['contact','depositor','bank','account'].forEach(k => {
+    const v = document.getElementById('cedit_' + k)?.value.trim() || '';
+    if (v) c.defaults[k] = v; else delete c.defaults[k];
+  });
+  persist(); renderCenterTabs(); renderTplList(); renderHistList();
+  if (document.getElementById('centerMgrList')?.children.length) renderCenterMgr();
+  closeCenterEdit();
+  gToast(`"${name}" 저장됨`);
+}
+function delCenterFromEdit() {
+  const id = document.getElementById('cedit_id').value;
+  if (S.templates.some(t => t.centerId === id)) {
+    gToast('이 센터를 사용하는 템플릿이 있습니다'); return;
+  }
+  S.centers = S.centers.filter(x => x.id !== id);
+  persist(); renderCenterTabs(); renderTplList(); renderHistList();
+  closeCenterEdit(); gToast('센터 삭제됨');
+}
+document.addEventListener('click', e => {
+  const popup = document.getElementById('centerEditPopup');
+  if (popup?.style.display !== 'none' && !popup.contains(e.target) && !e.target.closest('.ctab'))
+    closeCenterEdit();
+});
+
+// ══ 템플릿 센터 이동 ══
+function moveTplCenter(tplId, newCenterId) {
+  const t = S.templates.find(x => x.id === tplId);
+  if (!t) return;
+  t.centerId = newCenterId;
+  persist(); renderTplList(); saveTplToSupabase(t);
+  gToast(`"${t.name}" → ${cn(newCenterId)} 이동됨`);
+}
+
 // 센터 추가 — 상단바 인라인 방식
 function showCenterAddInline() {
   document.getElementById('centerAddInline').style.display = 'flex';
