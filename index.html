@@ -1058,6 +1058,7 @@ textarea { resize: vertical; min-height: 64px; line-height: 1.65; }
       <div class="s-stab on" onclick="switchStab(0)">출력 스타일</div>
       <div class="s-stab"    onclick="switchStab(1)">센터 관리</div>
       <div class="s-stab"    onclick="switchStab(2)">공통 가이드</div>
+      <div class="s-stab"    onclick="switchStab(3)">백업/복원</div>
     </div>
     <!-- 출력 스타일 -->
     <div class="s-stab-pane on" id="spane0">
@@ -1147,6 +1148,31 @@ textarea { resize: vertical; min-height: 64px; line-height: 1.65; }
       <div class="mt12" style="display:flex;gap:8px;justify-content:flex-end;align-items:center;">
         <button class="btn sm" onclick="resetGuide()">기본값으로 초기화</button>
         <button class="btn solid" onclick="saveGuide()">저장</button>
+      </div>
+    </div>
+    <!-- 백업/복원 -->
+    <div class="s-stab-pane" id="spane3">
+      <div style="font-size:12px;color:var(--t2);margin-bottom:16px;line-height:1.7;">
+        전체 데이터(템플릿·이력·센터·설정)를 백업하거나 복원합니다.
+      </div>
+      <div style="background:var(--s2);border-radius:var(--r);padding:14px 16px;margin-bottom:14px;">
+        <div style="font-size:12px;font-weight:700;margin-bottom:10px;">📦 백업</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button class="btn blue" onclick="backupClipboard()">클립보드로 복사</button>
+          <button class="btn blue" onclick="backupFile()">JSON 파일로 저장</button>
+        </div>
+      </div>
+      <div style="background:var(--red-bg);border:1px solid rgba(192,57,43,.15);border-radius:var(--r);padding:14px 16px;">
+        <div style="font-size:12px;font-weight:700;margin-bottom:4px;color:var(--red-t);">⚠️ 복원 (현재 데이터 덮어씌워짐)</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;margin-top:8px;">
+          <button class="btn" onclick="restoreClipboard()">클립보드에서 불러오기</button>
+          <button class="btn" onclick="document.getElementById('restoreFile').click()">
+            JSON 파일 불러오기
+          </button>
+          <input type="file" id="restoreFile" accept=".json" style="display:none"
+            onchange="restoreFromFile(this.files[0])">
+        </div>
+        <div style="font-size:11px;color:var(--t3);">※ 복원 전 반드시 백업하세요</div>
       </div>
     </div>
   </div>
@@ -2157,6 +2183,99 @@ function updateHistoryBadge() {
   b.style.display = S.history.length ? 'inline-flex' : 'none';
 }
 
+// ══ 백업/복원 ══
+
+function getBackupData() {
+  // Supabase URL/KEY 등 민감정보 제외하고 순수 데이터만
+  return JSON.stringify({
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    centers:   S.centers,
+    templates: S.templates,
+    history:   S.history.slice(0, 50),
+    cfg:       S.cfg
+  }, null, 2);
+}
+
+// 클립보드로 백업
+function backupClipboard() {
+  const data = getBackupData();
+  navigator.clipboard.writeText(data)
+    .then(() => gToast('백업 데이터가 클립보드에 복사됨'))
+    .catch(() => {
+      // fallback
+      const ta = document.createElement('textarea');
+      ta.value = data; ta.style.cssText = 'position:fixed;opacity:0;';
+      document.body.appendChild(ta); ta.select();
+      document.execCommand('copy'); document.body.removeChild(ta);
+      gToast('백업 데이터가 클립보드에 복사됨');
+    });
+}
+
+// JSON 파일로 백업
+function backupFile() {
+  const data = getBackupData();
+  const date = new Date().toISOString().slice(0,10).replace(/-/g,'');
+  const blob = new Blob([data], { type: 'application/json' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url; a.download = `kkangbi-doc-backup-${date}.json`;
+  a.click(); URL.revokeObjectURL(url);
+  gToast('백업 파일 저장됨');
+}
+
+// 데이터 복원 공통 처리
+function applyRestore(jsonStr) {
+  try {
+    const p = JSON.parse(jsonStr);
+    // 형식 검증
+    if (!p.centers || !p.templates || !p.cfg) {
+      gToast('올바른 백업 파일이 아닙니다'); return;
+    }
+    S.centers   = p.centers   || S.centers;
+    S.templates = p.templates || S.templates;
+    S.history   = p.history   || [];
+    if (p.cfg) Object.assign(S.cfg, p.cfg);
+    persist();
+    // 화면 전체 갱신
+    renderCenterTabs();
+    renderTplList();
+    renderHistList();
+    updateHistoryBadge();
+    renderDday();
+    // 설정 모달 갱신
+    renderCenterMgr();
+    loadCfg();
+    // Supabase 동기화
+    syncToSupabase();
+    gToast(`복원 완료 — 템플릿 ${S.templates.length}개, 이력 ${S.history.length}건`);
+  } catch(e) {
+    gToast('복원 실패: JSON 형식 오류');
+  }
+}
+
+// 클립보드에서 복원
+async function restoreClipboard() {
+  try {
+    const text = await navigator.clipboard.readText();
+    if (!text.trim()) { gToast('클립보드가 비어있습니다'); return; }
+    applyRestore(text);
+  } catch(e) {
+    gToast('클립보드 읽기 실패 — 파일 불러오기를 이용하세요');
+  }
+}
+
+// JSON 파일에서 복원
+function restoreFromFile(file) {
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => applyRestore(e.target.result);
+  reader.onerror = () => gToast('파일 읽기 실패');
+  reader.readAsText(file);
+  // input 초기화 (같은 파일 재업로드 가능하게)
+  document.getElementById('restoreFile').value = '';
+}
+
 // ══ 전역 토스트 ══
 function gToast(msg) {
   const el = document.getElementById('gToast');
@@ -2213,6 +2332,15 @@ function showStep3() {
   document.getElementById('mStep1').style.display = 'none';
   document.getElementById('mStep2').style.display = 'none';
   document.getElementById('mStep3').style.display = 'block';
+  // 본문 템플릿 textarea에 공통 스타일 자동 적용 (WYSIWYG 느낌)
+  const ta = document.getElementById('m_body');
+  if (ta) {
+    ta.style.fontFamily  = S.cfg.font  || 'Malgun Gothic';
+    ta.style.fontSize    = S.cfg.fsize || '12pt';
+    ta.style.lineHeight  = S.cfg.lh    || '200%';
+  }
+  // 변수 감지 실행
+  setTimeout(detectBodyVars, 50);
 }
 function showStep3Direct() { S.editMode = false; renderMFields(); showStep3(); }
 
@@ -2473,7 +2601,7 @@ function switchStab(idx) {
   modal.querySelectorAll('.s-stab-pane').forEach((el, i) => el.classList.toggle('on', i === idx));
   // 센터 관리 탭 열릴 때 목록 갱신
   if (idx === 1) renderCenterMgr();
-  // 가이드 탭 열릴 때 최신 값 로드
+  // 가이드 탭(2) / 백업복원 탭(3) 열릴 때 처리
   if (idx === 2) {
     const el = document.getElementById('c_guide');
     if (el) el.value = S.cfg.guide || '';
@@ -2542,41 +2670,76 @@ function resetGuide() {
 function renderCenterMgr() {
   document.getElementById('centerMgrList').innerHTML = S.centers.map(c => {
     const d = c.defaults || {};
-    return `<div data-center-id="${c.id}" style="border:1px solid var(--border);border-radius:var(--r);padding:13px 15px;margin-bottom:10px;">
-      <!-- 센터 헤더 -->
+    const cid = c.id;
+    return `<div data-center-id="${cid}" style="border:1px solid var(--border);border-radius:var(--r);padding:13px 15px;margin-bottom:10px;">
+      <!-- 센터 헤더: 센터명 + 색상 + 저장 + 삭제 -->
       <div class="flex items-center gap8" style="margin-bottom:10px;">
-        <div style="width:10px;height:10px;border-radius:50%;background:${c.color};flex-shrink:0;"></div>
-        <input type="text" value="${c.name}" onchange="updCenter('${c.id}',this.value)"
-          style="border:none;background:transparent;font-size:13px;font-weight:600;font-family:inherit;outline:none;flex:1;">
-        <input type="color" value="${c.color}" onchange="updCenterColor('${c.id}',this.value)"
+        <div id="cdot_${cid}" style="width:10px;height:10px;border-radius:50%;background:${c.color};flex-shrink:0;"></div>
+        <input type="text" id="cname_${cid}" value="${c.name}"
+          style="flex:1;padding:5px 8px;border:1px solid var(--border2);border-radius:var(--r-sm);font-size:13px;font-weight:600;font-family:inherit;outline:none;"
+          onkeydown="if(event.key==='Enter')saveCenterRow('${cid}')">
+        <input type="color" id="ccolor_${cid}" value="${c.color}"
+          onchange="document.getElementById('cdot_${cid}').style.background=this.value"
           title="색상 변경" style="width:26px;height:26px;border:1px solid var(--border2);border-radius:4px;cursor:pointer;padding:1px;">
-        <button class="btn danger sm del-btn" onclick="delCenter('${c.id}')">삭제</button>
+        <button class="btn blue sm" onclick="saveCenterRow('${cid}')">저장</button>
+        <button class="btn danger sm del-btn" onclick="delCenter('${cid}')">삭제</button>
       </div>
-      <!-- 센터별 기본값: 미입력 시 공통 설정값 사용 -->
+      <!-- 센터별 기본값 -->
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
         <div>
           <div class="flabel" style="margin-bottom:3px;">담당자 <span class="fs11 tc3" style="font-weight:400;">(미입력 시 공통값)</span></div>
-          <input type="text" value="${d.contact||''}" placeholder="${S.cfg.contact}"
-            onchange="updCenterDefault('${c.id}','contact',this.value)" style="font-size:12px;">
+          <input type="text" id="cd_contact_${cid}" value="${d.contact||''}" placeholder="${S.cfg.contact||''}"
+            style="font-size:12px;">
         </div>
         <div>
           <div class="flabel" style="margin-bottom:3px;">예금주 <span class="fs11 tc3" style="font-weight:400;">(미입력 시 공통값)</span></div>
-          <input type="text" value="${d.depositor||''}" placeholder="${S.cfg.depositor}"
-            onchange="updCenterDefault('${c.id}','depositor',this.value)" style="font-size:12px;">
+          <input type="text" id="cd_depositor_${cid}" value="${d.depositor||''}" placeholder="${S.cfg.depositor||''}"
+            style="font-size:12px;">
         </div>
         <div>
           <div class="flabel" style="margin-bottom:3px;">은행명</div>
-          <input type="text" value="${d.bank||''}" placeholder="${S.cfg.bank}"
-            onchange="updCenterDefault('${c.id}','bank',this.value)" style="font-size:12px;">
+          <input type="text" id="cd_bank_${cid}" value="${d.bank||''}" placeholder="${S.cfg.bank||''}"
+            style="font-size:12px;">
         </div>
         <div>
           <div class="flabel" style="margin-bottom:3px;">계좌번호</div>
-          <input type="text" value="${d.account||''}" placeholder="${S.cfg.account}"
-            onchange="updCenterDefault('${c.id}','account',this.value)" style="font-size:12px;">
+          <input type="text" id="cd_account_${cid}" value="${d.account||''}" placeholder="${S.cfg.account||''}"
+            style="font-size:12px;">
         </div>
+      </div>
+      <div style="margin-top:8px;text-align:right;">
+        <button class="btn blue sm" onclick="saveCenterRow('${cid}')">
+          변경사항 저장
+        </button>
       </div>
     </div>`;
   }).join('');
+}
+
+// 센터 행 전체 저장 (이름 + 색상 + 기본값 한번에)
+function saveCenterRow(id) {
+  const c = S.centers.find(x => x.id === id);
+  if (!c) return;
+  const name  = document.getElementById('cname_' + id)?.value.trim();
+  const color = document.getElementById('ccolor_' + id)?.value || c.color;
+  if (!name) { gToast('센터명을 입력하세요'); return; }
+  c.name  = name;
+  c.color = color;
+  // 기본값
+  if (!c.defaults) c.defaults = {};
+  ['contact','depositor','bank','account'].forEach(k => {
+    const v = document.getElementById(`cd_${k}_${id}`)?.value.trim() || '';
+    if (v) c.defaults[k] = v;
+    else   delete c.defaults[k];
+  });
+  persist();
+  renderCenterTabs();
+  renderTplList();
+  renderHistList();
+  // 색상 점 즉시 반영
+  const dot = document.getElementById('cdot_' + id);
+  if (dot) dot.style.background = color;
+  gToast(`"${name}" 저장됨`);
 }
 
 // 센터별 기본값 업데이트
