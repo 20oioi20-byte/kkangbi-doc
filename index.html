@@ -1178,6 +1178,11 @@ textarea { resize: vertical; min-height: 64px; line-height: 1.65; }
         <button class="btn sm" onclick="resetGuide()">기본값으로 초기화</button>
         <button class="btn solid" onclick="saveGuide()">저장</button>
       </div>
+      <!-- 수정 이력 -->
+      <div style="margin-top:14px;border-top:1px solid var(--border);padding-top:12px;">
+        <div style="font-size:11px;font-weight:700;color:var(--t2);margin-bottom:8px;">수정 이력</div>
+        <div id="guideHistoryList"><div style="font-size:11px;color:var(--t3);">수정 이력 없음</div></div>
+      </div>
     </div>
     <!-- 백업/복원 -->
     <div class="s-stab-pane" id="spane3">
@@ -1441,7 +1446,11 @@ const cn  = id => !id ? '기본문서' : (S.centers.find(c => c.id === id)?.name
 const cc  = id => S.centers.find(c => c.id === id)?.color || '#888';
 const fmt = n  => (n === '' || n == null) ? '' : Number(n).toLocaleString('ko-KR');
 // 금액 키 판별: 액·금·총액·부가세·가액 포함
-const isAmt = k => /액|금|총액|부가세|가액/.test(k);
+const isAmt = k => {
+  // 날짜성 키는 금액 포맷 제외 (세금계산서일, 발행일 등)
+  if (/일$|날짜|기간|연월|연도|년월/.test(k)) return false;
+  return /액|금|총액|부가세|가액/.test(k);
+};
 const curTpl = () => S.templates.find(t => t.id === S.curTplId);
 
 // ══ 센터 탭 렌더 ══
@@ -1502,9 +1511,12 @@ function renderTplList(filter = '') {
       }
     }
     // 센터 이동 드롭다운
-    const moveOpts = S.centers.map(c =>
-      `<option value="${c.id}" ${c.id===t.centerId?'selected':''}>${c.name}</option>`
-    ).join('');
+    const isDefault = !S.centers.find(c => c.id === t.centerId);
+    const moveOpts = [
+      `<option value="" ${isDefault?'selected':''}>기본문서</option>`,
+      ...S.centers.map(c =>
+        `<option value="${c.id}" ${c.id===t.centerId?'selected':''}>${c.name}</option>`)
+    ].join('');
     return `<div class="tpl-item ${isOn ? 'on' : ''}" onclick="loadTpl('${t.id}')">
       <div class="tpl-item-left" style="min-width:0;flex:1;">
         <div class="tpl-dot" style="background:${cc(t.centerId)}"></div>
@@ -1523,6 +1535,14 @@ function renderTplList(filter = '') {
             cursor:pointer;max-width:70px;">
           ${moveOpts}
         </select>
+        <button onclick="delTplConfirm('${t.id}');event.stopPropagation()"
+          title="템플릿 삭제"
+          style="width:20px;height:20px;border-radius:50%;border:1px solid var(--border);
+            background:var(--surface);color:var(--t3);font-size:11px;cursor:pointer;
+            display:flex;align-items:center;justify-content:center;flex-shrink:0;
+            transition:all .12s;"
+          onmouseover="this.style.background='var(--red-bg)';this.style.color='var(--red-t)'"
+          onmouseout="this.style.background='var(--surface)';this.style.color='var(--t3)'">✕</button>
       </div>
     </div>`;
   }).join('');
@@ -1718,6 +1738,12 @@ function renderFields() {
 // ══ 필드 입력 처리 ══
 function onFInput(key, val) {
   S.curVals[key] = val;
+
+  // 청구연월 입력 시 → 관련 날짜 필드 자동 추론
+  if (key === '청구연월' && val) {
+    autoFillDates(val);
+  }
+
   // 자동계산 필드 갱신
   curTpl().fields.forEach(f => {
     if (f.type !== 'calc') return;
@@ -1728,6 +1754,50 @@ function onFInput(key, val) {
   });
   checkWarn();
   updatePreview();
+}
+
+// 청구연월에서 날짜 관련 필드 자동 추론
+// 예) "26년6월" → 청구기간: "2026. 6. 1. ~ 2026. 6. 30.", 붙임연월: "2026.6"
+function autoFillDates(yearMonth) {
+  const m = yearMonth.match(/(\d{2,4})년\s*(\d{1,2})월?/);
+  if (!m) return;
+
+  const year  = m[1].length === 2 ? 2000 + parseInt(m[1]) : parseInt(m[1]);
+  const month = parseInt(m[2]);
+  // 해당 월의 마지막 날 계산
+  const lastDay = new Date(year, month, 0).getDate();
+
+  const tpl = curTpl(); if (!tpl) return;
+
+  // 청구기간 자동 세팅 (비어있을 때만)
+  if (!S.curVals['청구기간']) {
+    const period = `${year}. ${month}. 1. ~ ${year}. ${month}. ${lastDay}.`;
+    S.curVals['청구기간'] = period;
+    const el = document.getElementById('f_청구기간');
+    if (el) el.value = period;
+  }
+
+  // 붙임연월 자동 세팅
+  S.curVals['붙임연월'] = `${year}.${month}`;
+
+  // 세금계산서일이 비어있으면 추론 (해당 월 25일)
+  if (!S.curVals['세금계산서일']) {
+    const taxDate = `${year}년 ${month}월 25일`;
+    S.curVals['세금계산서일'] = taxDate;
+    const el = document.getElementById('f_세금계산서일');
+    if (el) el.value = taxDate;
+  }
+
+  // 본문의 {{날짜패턴}} 필드들 자동 업데이트
+  tpl.fields.forEach(f => {
+    if (f.type === 'calc') return;
+    // 필드키에 '연월'이 있고 비어있으면 청구연월로 채움
+    if (f.key !== '청구연월' && /연월/.test(f.key) && !S.curVals[f.key]) {
+      S.curVals[f.key] = yearMonth;
+      const el = document.getElementById('f_' + f.key);
+      if (el) el.value = yearMonth;
+    }
+  });
 }
 
 // ══ 자동계산 엔진 ══
@@ -1815,9 +1885,22 @@ function buildVals() {
   v.cfg_account   = cd.account   || S.cfg.account;
   v.cfg_depositor = cd.depositor || S.cfg.depositor;
   v.cfg_contact   = cd.contact   || S.cfg.contact;
-  // 붙임연월: 세금계산서일에서 추출, 없으면 청구연월 사용
-  const ym = (v['세금계산서일'] || '').match(/(\d{4})년\s*(\d{1,2})월/);
-  v['붙임연월'] = ym ? `${ym[1]}.${ym[2]}` : (v['청구연월'] || '');
+  // 붙임연월: 수동입력 우선 → 세금계산서일 추출 → 청구연월 파싱
+  if (!v['붙임연월']) {
+    const ym = (v['세금계산서일'] || '').match(/(\d{4})년\s*(\d{1,2})월/);
+    if (ym) {
+      v['붙임연월'] = `${ym[1]}.${ym[2]}`;
+    } else {
+      // 청구연월에서 파싱: "26년6월" → "2026.6"
+      const cy = (v['청구연월'] || '').match(/(\d{2,4})년\s*(\d{1,2})월?/);
+      if (cy) {
+        const year = cy[1].length === 2 ? '20' + cy[1] : cy[1];
+        v['붙임연월'] = `${year}.${cy[2]}`;
+      } else {
+        v['붙임연월'] = v['청구연월'] || '';
+      }
+    }
+  }
   return v;
 }
 
@@ -1827,7 +1910,8 @@ function renderTmpl(tmpl, vals) {
     const val = vals[key];
     if (val === undefined || val === '') return `{{${key}}}`;
     const n = parseFloat(String(val).replace(/,/g, ''));
-    return (!isNaN(n) && isAmt(key)) ? fmt(n) : val;
+    // isAmt가 false인 키(날짜 등)는 포맷 없이 그대로 반환
+    return (!isNaN(n) && n !== 0 && isAmt(key)) ? fmt(n) : val;
   });
 }
 
@@ -1851,8 +1935,11 @@ function updatePreview() {
   const tpl = curTpl(); if (!tpl) return;
   const vals   = buildVals();
   const title  = renderTmpl(tpl.titleTemplate, vals);
-  const aiTxt  = document.getElementById('aiDraft')?.textContent || '';
-  const aiOk   = aiTxt && !aiTxt.includes('초안 생성을 누르세요');
+  const aiDraftEl = document.getElementById('aiDraft');
+  const aiTxt  = (aiDraftEl?.textContent || '').trim();
+  const aiOk   = aiTxt.length > 5
+    && !aiTxt.includes('초안 생성을 누르세요')
+    && !aiTxt.includes('직접 입력');
   const extra  = document.getElementById('extraInput')?.value || '';
   const body   = tpl.bodyTemplate + (extra ? '\n\n' + extra : '');
   const cfg    = S.cfg;
@@ -2648,9 +2735,9 @@ function saveTpl() {
 // ══ 설정 모달 ══
 function openSettings() {
   loadCfg(); renderCenterMgr();
-  // 가이드 초기 로드
   const gEl = document.getElementById('c_guide');
-  if (gEl) gEl.value = S.cfg.guide || '';
+  if (gEl) gEl.value = S.cfg.guide || DEFAULT_GUIDE;
+  renderGuideHistory();
   document.getElementById('settingsModal').classList.add('open');
 }
 function closeSettings() { document.getElementById('settingsModal').classList.remove('open'); }
@@ -2687,38 +2774,96 @@ function saveCfg() {
   if (S.curTplId) updatePreview(); // 스타일 즉시 반영
 }
 
-// 공통 가이드 저장
+// 공통 가이드 저장 (수정 이력 보관)
 function saveGuide() {
   const el = document.getElementById('c_guide');
-  if (el) S.cfg.guide = el.value;
-  persist(); gToast('공통 가이드 저장됨');
+  if (!el) return;
+  const newGuide = el.value;
+  const oldGuide = S.cfg.guide || '';
+  if (newGuide === oldGuide) { gToast('변경 없음'); return; }
+  // 수정 이력 저장
+  if (!S.cfg.guideHistory) S.cfg.guideHistory = [];
+  S.cfg.guideHistory.unshift({
+    savedAt: new Date().toISOString(),
+    content: oldGuide.slice(0, 200) + (oldGuide.length > 200 ? '…' : '')
+  });
+  // 최대 10개 이력 유지
+  S.cfg.guideHistory = S.cfg.guideHistory.slice(0, 10);
+  S.cfg.guide = newGuide;
+  persist();
+  renderGuideHistory();
+  gToast('공통 가이드 저장됨');
+}
+
+// 가이드 수정 이력 렌더링
+function renderGuideHistory() {
+  const el = document.getElementById('guideHistoryList');
+  if (!el) return;
+  const hist = S.cfg.guideHistory || [];
+  if (!hist.length) {
+    el.innerHTML = '<div style="font-size:11px;color:var(--t3);padding:8px 0;">수정 이력 없음</div>';
+    return;
+  }
+  el.innerHTML = hist.map((h, i) => {
+    const dt = new Date(h.savedAt).toLocaleString('ko-KR', {month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
+    return `<div style="display:flex;align-items:center;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--border);font-size:11px;">
+      <div>
+        <span style="font-weight:600;color:var(--t2);">${dt}</span>
+        <span style="color:var(--t3);margin-left:8px;">${h.content}</span>
+      </div>
+      <button class="btn sm" style="font-size:10px;padding:2px 8px;" onclick="restoreGuideHistory(${i})">복원</button>
+    </div>`;
+  }).join('');
+}
+
+function restoreGuideHistory(idx) {
+  const h = (S.cfg.guideHistory || [])[idx];
+  if (!h) return;
+  // 현재 가이드를 이력의 미리보기로 복원 (전체 내용은 저장 안 됐으므로 안내)
+  gToast('이전 가이드 내용의 앞부분만 미리보기로 저장됩니다. 전체 복원은 백업 파일을 이용하세요.');
 }
 // 공통 가이드 기본값 초기화
 const DEFAULT_GUIDE = `당신은 KTIS 사내 공문서 작성 전문 어시스턴트입니다.
 문서 작성 요청이 들어오면 아래 KTIS 공통 작성 가이드를 반드시 적용하세요.
 
 [공통 서식 기준]
-- 폰트: 맑은 고딕 / 폰트 크기: 12p / 줄간격: 200%
+- 폰트: 맑은 고딕
+- 폰트 크기: 12p (본문, 표 텍스트 모두 동일)
+- 줄간격: 200%
 
 [1] 날짜 표기 규칙
 - 본문 날짜: 연월일 사이에 마침표(.) 표기, 한 자리 숫자도 앞에 0 붙이지 않음
   예) 2025.8.19. / 2025.6.8.
 - 연도 축약 시: 작은따옴표(') 사용  예) '25년
+- 관련 문서 내 날짜: 전자결재 시스템 표기법 준수
 
-[2] 항목 기호 및 들여쓰기
-- 1단계: 1., 2. / 2단계: 가., 나. / 3단계: ○ 또는 1), 2)
-- 4단계: - 또는 가), 나) / 5단계: · / 6단계: ··
-- 들여쓰기: 1단계 2칸, 이하 2타씩 이동
+[2] 항목 기호 및 들여쓰기 규칙
+- 1단계: 1., 2., 3. / 2단계: 가., 나., 다. / 3단계: ○ 또는 1), 2), 3)
+- 4단계: - 또는 가), 나) / 5단계: · 또는 (1), (2) / 6단계: ·· 또는 (가), (나)
+- 들여쓰기: 1단계 왼쪽 기본선에서 2칸, 이하 2타씩 이동
 
-[3] 관련 문서: 문서번호(날짜) 제목 순 / 제목 생략 금지
+[3] 관련 문서 작성 규칙
+- 형식: 문서번호(생산날짜) 제목 순 기재
+  예) 가. xxx팀-000000-12345678(2025.08.28) 제목
+- 제목 생략·축약 금지, 두 줄 이상 시 항목 첫 글자에 맞춰 정렬
+- 관련성 높은 문서부터 순서대로 기재
 
-[4] 붙임 자료
+[4] 붙임 자료 작성 규칙
 - 1개: 붙임: 제목 1부.  끝.
-- 2개 이상: 번호 구분, 마지막에 끝.
+- 2개 이상: 붙임  1. 관련문서 1부 / 2. 세부계획서 1부.  끝.
+- 본문과 붙임 상충 시 본문 우선
 
-[5] 마무리: 반드시 '끝.' (2칸 띄우고 표기)
+[5] 문서 마무리 규칙
+- 반드시 '끝.' 으로 마무리 (마지막 글자 뒤 2칸 띄우고 표기)
+- 본문 마지막: …바랍니다.  끝.
+- 붙임 마지막: …1부.  끝.
+- 표로 끝날 경우: 표 아래 왼쪽 한계선에서 2칸 띄우고 표기
 
-[6] 주의: 제목 축약 금지 / 글자 크기·간격 임의 조정 금지`;
+[6] 공통 주의사항
+- 제목 생략·축약 금지 / 글자 크기·간격 임의 조정 금지
+- 마침표(.)는 마지막 항목 뒤에만 표기
+- 금액은 원 단위, 숫자에 쉼표 표기 (예: 1,234,567)
+- 날짜 필드에는 절대 숫자 포맷(쉼표) 사용 금지`;
 
 function resetGuide() {
   if (!confirm('기본값으로 초기화하시겠습니까?')) return;
@@ -2866,13 +3011,68 @@ document.addEventListener('click', e => {
     closeCenterEdit();
 });
 
+// ══ 템플릿 삭제 (2클릭 확인) ══
+function delTplConfirm(id) {
+  const btn = document.querySelector(`[data-del-tpl="${id}"]`);
+  // data속성 대신 직접 찾기 — 버튼의 title로 상태 추적
+  const allBtns = document.querySelectorAll('[title="템플릿 삭제"]');
+  let targetBtn = null;
+  allBtns.forEach(b => { if (b.getAttribute('data-tpl-id') === id) targetBtn = b; });
+
+  if (!targetBtn) {
+    // 버튼에 data-tpl-id 추가 후 재시도
+    allBtns.forEach(b => {
+      if (b.onclick?.toString().includes(id)) {
+        b.setAttribute('data-tpl-id', id);
+        targetBtn = b;
+      }
+    });
+  }
+
+  const t = S.templates.find(x => x.id === id);
+  if (!t) return;
+
+  if (!t._delConfirm) {
+    t._delConfirm = true;
+    // 버튼 상태 변경
+    const btns = document.querySelectorAll('button[title="템플릿 삭제"]');
+    btns.forEach(b => {
+      if (b.getAttribute('onclick')?.includes(id) || b.onclick?.toString().includes(id)) {
+        b.textContent = '!';
+        b.style.background = 'var(--red-t)';
+        b.style.color = '#fff';
+      }
+    });
+    setTimeout(() => {
+      t._delConfirm = false;
+      renderTplList();
+    }, 3000);
+    return;
+  }
+
+  // 2번째 클릭 → 실제 삭제
+  delete t._delConfirm;
+  S.templates = S.templates.filter(x => x.id !== id);
+  persist();
+  delTplFromSupabase(id);
+  renderTplList();
+  gToast(`"${t.name}" 삭제됨`);
+  // 현재 작업 중인 템플릿이면 초기화
+  if (S.curTplId === id) {
+    S.curTplId = null;
+    document.getElementById('blankState').style.display = 'flex';
+    document.getElementById('workScreen').style.display = 'none';
+  }
+}
+
 // ══ 템플릿 센터 이동 ══
 function moveTplCenter(tplId, newCenterId) {
   const t = S.templates.find(x => x.id === tplId);
   if (!t) return;
-  t.centerId = newCenterId;
+  t.centerId = newCenterId || null; // 빈값 = 기본문서
   persist(); renderTplList(); saveTplToSupabase(t);
-  gToast(`"${t.name}" → ${cn(newCenterId)} 이동됨`);
+  const destName = newCenterId ? cn(newCenterId) : '기본문서';
+  gToast(`"${t.name}" → ${destName} 이동됨`);
 }
 
 // 센터 추가 — 상단바 인라인 방식
