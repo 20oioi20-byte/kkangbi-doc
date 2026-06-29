@@ -2972,7 +2972,7 @@ ${clean}
   "fields": [
     {"key":"키명", "label":"표시명", "type":"text|amount|calc", "placeholder":"힌트", "formula":"", "autoFill":true}
   ],
-  "bodyTemplate": "본문 (표는 [TABLE:이름]\n헤더|컬럼\n[/TABLE], AI분석위치 [AI_ANALYSIS], 계좌 {{cfg_bank}} {{cfg_account}} {{cfg_depositor}}, 담당자 {{cfg_contact}}, 붙임연월 {{붙임연월}})"
+  "bodyTemplate": "본문 (표는 반드시 [TABLE:표명]\n헤더셀1|헤더셀2|헤더셀3\n데이터1|데이터2|데이터3\n[/TABLE] 형식 사용, AI분석위치 [AI_ANALYSIS], 계좌 {{cfg_bank}} {{cfg_account}} {{cfg_depositor}}, 담당자 {{cfg_contact}}, 붙임연월 {{붙임연월}})"
 }
 
 규칙:
@@ -2982,6 +2982,9 @@ ${clean}
 - 부가세=공급가액*0.1, 차액=당월-전월 등은 type:calc
 - 고정 텍스트는 본문에 그대로 유지
 - 담당자(담당, 연락처, 팀장, PM 등), 수신처, 은행명, 계좌번호, 예금주 정보가 있으면 반드시 contactInfo 필드에 추출
+- 문서에 표(table)가 있으면 반드시 [TABLE:표명] 문법으로 변환. 표를 텍스트로 풀지 말 것
+- [TABLE] 내부에서 변수는 {{변수키}} 형식 그대로 사용 가능 (예: {{당월공급가액}})
+- 표가 여러 개면 각각 [TABLE:표1], [TABLE:표2] 등으로 구분
 
 추가 응답 필드:
 {
