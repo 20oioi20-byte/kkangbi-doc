@@ -4286,35 +4286,7 @@ setTimeout(() => {
   const aBtn = document.getElementById('autoSaveToggle');
   if (aBtn) aBtn.textContent = S.autoSaveHist !== false ? '자동저장 ON' : '자동저장 OFF';
 }, 0);
-// API 연결 상태 확인 (시작 시 1회)
-async function checkApiHealth() {
-  try {
-    const r = await fetch('/api/claude', {
-      method: 'POST', headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ model:'claude-sonnet-4-6', max_tokens:1,
-        messages:[{role:'user',content:'ping'}] })
-    });
-    if (!r.ok) {
-      const msg = r.status === 404
-        ? '⚠️ /api/claude 엔드포인트 없음 (404) — GitHub에 api/claude.js 파일 확인 필요. AI 분석 불가, 수동 편집은 가능합니다.'
-        : '⚠️ API 오류 ' + r.status + ' — AI 분석 기능이 제한됩니다.';
-      showApiWarnBanner(msg);
-    }
-  } catch(e) {
-    showApiWarnBanner('⚠️ API 연결 실패 — 네트워크를 확인하세요. 수동 편집은 가능합니다.');
-  }
-}
-function showApiWarnBanner(msg) {
-  const b = document.createElement('div');
-  b.style.cssText = 'position:fixed;bottom:0;left:0;right:0;background:#7A4F00;color:#fff;'
-    + 'font-size:12px;padding:8px 16px;z-index:9999;display:flex;align-items:center;'
-    + 'justify-content:space-between;gap:12px;';
-  b.innerHTML = '<span>' + msg + '</span>'
-    + '<button onclick="this.parentNode.remove()" style="background:rgba(255,255,255,.2);'
-    + 'border:none;color:#fff;padding:3px 10px;border-radius:4px;cursor:pointer;font-size:11px;">닫기</button>';
-  document.body.appendChild(b);
-}
-checkApiHealth();
+// API health check 제거 (정상 작동 확인됨)
 
 // Supabase에서 최신 데이터 로드 (로컬보다 최신이면 덮어씀)
 loadFromSupabase().then(() => {
