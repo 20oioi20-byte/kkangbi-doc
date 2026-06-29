@@ -2991,45 +2991,37 @@ async function handlePaste() {
 }
 
 // 공통 텍스트 분석 함수 (MHT/붙여넣기 공용)
-async function analyzeDocText(clean) {
+// mhtTitle: MHT에서 추출한 제목 (있으면 bodyTemplate 재생성 안 함)
+async function analyzeDocText(clean, mhtTitle) {
   const guide = S.cfg.guide || '';
-  const prompt = `${guide}
+  const isMht = !!mhtTitle; // MHT 파싱 경유 여부
 
-위 가이드를 참고하여 다음 결재문서 텍스트를 분석하고 JSON 형식으로만 응답하세요. 마크다운 없이 JSON만.
-
-문서:
-${clean}
-
-응답 형식:
-{
-  "docName": "문서명",
-  "titleTemplate": "제목 패턴 (변동부분 {{변수키}})",
-  "fields": [
-    {"key":"키명", "label":"표시명", "type":"text|amount|calc", "placeholder":"힌트", "formula":"", "autoFill":true}
-  ],
-  "bodyTemplate": "본문 (표는 반드시 [TABLE:표명]\n헤더셀1|헤더셀2|헤더셀3\n데이터1|데이터2|데이터3\n[/TABLE] 형식 사용, AI분석위치 [AI_ANALYSIS], 계좌 {{cfg_bank}} {{cfg_account}} {{cfg_depositor}}, 담당자 {{cfg_contact}}, 붙임연월 {{붙임연월}})"
-}
-
-규칙:
-- 매월 바뀌는 값(날짜, 금액, 인원)만 변수로 처리
-- 날짜·청구연월·청구기간·세금계산서일 등 → autoFill:false
-- 인원·전월금액 등 잘 안바뀌는 값 → autoFill:true
-- 부가세=공급가액*0.1, 차액=당월-전월 등은 type:calc
-- 고정 텍스트는 본문에 그대로 유지
-- 담당자(담당, 연락처, 팀장, PM 등), 수신처, 은행명, 계좌번호, 예금주 정보가 있으면 반드시 contactInfo 필드에 추출
-- 문서에 표(table)가 있으면 반드시 [TABLE:표명] 문법으로 변환. 표를 텍스트로 풀지 말 것
-- [TABLE] 내부에서 변수는 {{변수키}} 형식 그대로 사용 가능 (예: {{당월공급가액}})
-- 표가 여러 개면 각각 [TABLE:표1], [TABLE:표2] 등으로 구분
-
-추가 응답 필드:
-{
-  "contactInfo": {
-    "contact": "담당자명/연락처 (예: 홍길동 팀장 / 010-1234-5678)",
-    "bank": "은행명",
-    "account": "계좌번호",
-    "depositor": "예금주"
-  }
-}`;
+  // MHT 모드: body는 파싱 결과 그대로, AI는 문서명+필드만 추출
+  // 텍스트 모드: AI가 bodyTemplate까지 생성
+  const prompt = guide + '\n\n'
+    + '다음 결재문서를 분석하고 JSON만 응답하세요. 마크다운 없이 JSON만.\n\n'
+    + '문서:\n' + clean + '\n\n'
+    + (isMht
+      ? '응답 형식 (bodyTemplate 제외 — 본문은 원본 그대로 사용):\n'
+        + '{"docName":"문서명","fields":['
+        + '{"key":"키명","label":"표시명","type":"text|amount|calc","placeholder":"힌트","formula":"","autoFill":true}'
+        + '],"contactInfo":{"contact":"","bank":"","account":"","depositor":""}}\n\n'
+        + '규칙:\n'
+        + '- 매월 바뀌는 값(날짜, 금액, 인원)만 변수로 처리\n'
+        + '- 날짜·연월·기간 등 → autoFill:false\n'
+        + '- 인원·전월금액 → autoFill:true\n'
+        + '- 부가세/합계 등 계산 필드 → type:calc\n'
+        + '- bodyTemplate은 응답하지 말 것'
+      : '응답 형식:\n'
+        + '{"docName":"문서명","titleTemplate":"제목({{변수}})","fields":['
+        + '{"key":"키명","label":"표시명","type":"text|amount|calc","placeholder":"힌트","formula":"","autoFill":true}'
+        + '],"bodyTemplate":"본문 (표는 [TABLE:이름]\\n헤더|컬럼\\n[/TABLE], AI분석 [AI_ANALYSIS])",'
+        + '"contactInfo":{"contact":"","bank":"","account":"","depositor":""}}\n\n'
+        + '규칙:\n'
+        + '- 매월 바뀌는 값만 변수로 처리\n'
+        + '- 날짜·연월·기간 → autoFill:false\n'
+        + '- 표가 있으면 반드시 [TABLE] 문법 사용, 표를 텍스트로 풀지 말 것'
+    );
 
   try {
     const resp = await fetch('/api/claude', {
@@ -3037,9 +3029,8 @@ ${clean}
       body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 4000,
         messages: [{ role: 'user', content: prompt }] })
     });
-    if (!resp.ok) {
-      throw new Error('API ' + resp.status + ': ' + resp.statusText);
-    }
+    if (!resp.ok) throw new Error('API ' + resp.status + ': ' + resp.statusText);
+
     const data = await resp.json();
     const rawTxt = (data.content?.[0]?.text || '').replace(/```json[\s\S]*?```|```/g, '').trim();
     let parsed;
@@ -3049,19 +3040,29 @@ ${clean}
       if (m) parsed = JSON.parse(m[0]);
       else throw e;
     }
-    document.getElementById('m_name').value     = parsed.docName || '';
-    // 제목: AI가 준 titleTemplate 사용, 없으면 MHT 제목 직접 활용
-    const titleTpl = parsed.titleTemplate || '';
-    document.getElementById('m_titleTpl').value = titleTpl;
-    document.getElementById('m_body').value     = parsed.bodyTemplate || '';
+
+    document.getElementById('m_name').value = parsed.docName || '';
+
+    if (isMht) {
+      // MHT 모드: 제목·본문은 파싱 결과 그대로 유지
+      // 제목이 이미 handleMHT에서 세팅됐으므로 덮어쓰지 않음
+      if (!document.getElementById('m_titleTpl').value && parsed.titleTemplate) {
+        document.getElementById('m_titleTpl').value = parsed.titleTemplate;
+      }
+      document.getElementById('m_body').value = clean; // 파싱된 원본 그대로
+    } else {
+      // 텍스트/직접입력 모드: AI가 생성한 bodyTemplate 사용
+      document.getElementById('m_titleTpl').value = parsed.titleTemplate || '';
+      document.getElementById('m_body').value = parsed.bodyTemplate || '';
+    }
+
     mFields = parsed.fields || [];
     if (parsed.contactInfo) showContactInfoReview(parsed.contactInfo);
     showStep3('✓ AI 분석 완료 — 제목/본문에서 바꿀 텍스트를 드래그해서 변수를 지정하세요');
   } catch(e) {
     console.warn('analyzeDocText 실패:', e.message);
-    // API 실패 → 텍스트를 본문에 그대로 넣고 수동 편집 모드로 진입
     document.getElementById('m_name').value = '';
-    document.getElementById('m_titleTpl').value = '';
+    if (!isMht) document.getElementById('m_titleTpl').value = '';
     document.getElementById('m_body').value = clean;
     mFields = [];
     showStep3('⚠️ AI 분석 실패 (' + e.message + ') — 본문을 직접 확인하고 드래그로 변수를 지정하세요');
@@ -3311,11 +3312,17 @@ async function handleMHT(file) {
     });
     if (!resp.ok) throw new Error('서버 파싱 실패');
     const result = await resp.json();
-    const clean = result.clean || result; // 하위 호환
+    const clean = result.clean || (typeof result === 'string' ? result : '');
     if (!clean || clean.length < 10) throw new Error('파싱 결과 없음');
-    // MHT에서 추출한 스타일 저장 → Step3에서 적용
+    // 스타일 저장
     if (result.style) window._mhtStyle = result.style;
-    await analyzeDocText(clean);
+    // 제목이 파싱됐으면 제목 템플릿에 직접 세팅 (AI 분석 없이)
+    if (result.title) {
+      document.getElementById('m_titleTpl').value = result.title;
+    }
+    // 본문은 파싱 결과 그대로 세팅 후 AI 분석
+    // AI에게는 [TABLE] 구조 그대로 전달 (분석 프롬프트에 반영)
+    await analyzeDocText(clean, result.title || '');
   } catch(e) {
     // fallback: 브라우저 QP 파싱
     console.warn('서버 파싱 실패, 브라우저 재시도:', e);
