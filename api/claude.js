@@ -1,4 +1,4 @@
-// api/claude.js — Claude API 프록시 + MHT 파싱 (Kaoni MHT / UTF-8 한글 지원)
+// api/claude.js — Claude API 프록시 + MHT 파싱 (Kaoni 공문서 / 제목+본문만 추출)
 // Vercel 환경변수: ANTHROPIC_API_KEY
 
 export default async function handler(req, res) {
@@ -13,7 +13,6 @@ export default async function handler(req, res) {
 
   const body = req.body || {};
 
-  // ── MHT 파싱 모드 ──────────────────────────────────────────
   if (body.type === 'parse_mht') {
     try {
       const clean = parseMHT(body.content || '');
@@ -23,7 +22,6 @@ export default async function handler(req, res) {
     }
   }
 
-  // ── Claude API 프록시 모드 ──────────────────────────────────
   try {
     const r = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -47,105 +45,154 @@ export default async function handler(req, res) {
   }
 }
 
-// ── MHT 파싱 유틸 ──────────────────────────────────────────────
+// ── MHT 파싱 ──────────────────────────────────────────────────
 function parseMHT(raw) {
-  // 1단계: boundary 추출
   const boundaryMatch = raw.match(/boundary="?([^"\r\n;]+)"?/i);
   const boundary = boundaryMatch ? boundaryMatch[1].trim() : null;
 
   let htmlContent = '';
 
   if (boundary) {
-    // 2단계: MIME 파트 분리
     const parts = raw.split(new RegExp('--' + escapeRegex(boundary)));
     for (const part of parts) {
-      if (!part.trim() || part.trim() === '--') continue;
-
-      const isHtml = /Content-Type:\s*text\/html/i.test(part);
-      if (!isHtml) continue;
-
-      // 헤더/본문 분리 (빈 줄 기준)
+      if (!/Content-Type:\s*text\/html/i.test(part)) continue;
       const bodyStart = part.search(/\r?\n\r?\n/);
       if (bodyStart === -1) continue;
       const partHeader = part.slice(0, bodyStart);
       const partBody   = part.slice(bodyStart).trim();
 
-      const isBase64 = /Content-Transfer-Encoding:\s*base64/i.test(partHeader);
-      const isQP     = /Content-Transfer-Encoding:\s*quoted-printable/i.test(partHeader);
-
-      if (isBase64) {
+      if (/Content-Transfer-Encoding:\s*base64/i.test(partHeader)) {
         try {
-          const b64 = partBody.replace(/\s/g, '');
-          htmlContent = Buffer.from(b64, 'base64').toString('utf-8');
+          htmlContent = Buffer.from(partBody.replace(/\s/g, ''), 'base64').toString('utf-8');
         } catch(e) { htmlContent = partBody; }
-      } else if (isQP) {
+      } else if (/Content-Transfer-Encoding:\s*quoted-printable/i.test(partHeader)) {
         htmlContent = decodeQP(partBody);
       } else {
-        // 인코딩 없음 — UTF-8 직접 포함
         htmlContent = partBody;
       }
       break;
     }
   }
 
-  // boundary 없거나 HTML 파트 못 찾은 경우 → 전체 QP 디코딩
-  if (!htmlContent) {
-    htmlContent = decodeQP(raw);
-  }
+  if (!htmlContent) htmlContent = decodeQP(raw);
 
-  // 3단계: HTML → 순수 텍스트
-  return htmlToText(htmlContent).slice(0, 4000);
+  return extractDocContent(htmlContent).slice(0, 5000);
 }
 
-// QP 디코딩 — Latin-1 바이트열을 UTF-8로 변환 (한글 지원)
-function decodeQP(str) {
-  // 소프트 줄바꿈 제거
-  const joined = str.replace(/=\r?\n/g, '');
+// ── Kaoni 공문서 핵심 추출: 제목 + 본문만 ──────────────────
+function extractDocContent(html) {
+  html = html
+    .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+    .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+    .replace(/<img[^>]*>/gi, '');
 
-  // =XX 시퀀스를 바이트 배열로 수집 후 Buffer로 UTF-8 디코딩
-  // 연속된 =XX (멀티바이트 UTF-8) 처리
-  let result = '';
-  let i = 0;
+  // ── 1. 제목 추출 (FIELD 제거 전에 먼저) ──
+  // Kaoni: id="doctitle" 또는 "제 목 :" 다음 셀
+  let titleText = '';
+  const doctitleMatch = html.match(/id="doctitle"[^>]*>([\s\S]*?)<\/td>/i);
+  if (doctitleMatch) {
+    titleText = htmlToPlain(doctitleMatch[1]).trim();
+  } else {
+    // fallback: "제 목 :" 텍스트 다음 TD
+    const titleRowMatch = html.match(/제\s*목\s*[：:][^<]*<\/[^>]+>\s*<td[^>]*>([\s\S]*?)<\/td>/i);
+    if (titleRowMatch) titleText = htmlToPlain(titleRowMatch[1]).trim();
+  }
+
+  // ── 2. 헤더 메타정보 제거 ──
+  // FIELD 클래스 셀 (문서번호, 결재란 등)
+  html = html.replace(/<td[^>]*class="FIELD"[^>]*>[\s\S]*?<\/td>/gi, '<td></td>');
+  // 결재/협조 테이블 (기안자, 팀장, 단장 등 키워드가 있는 행 전체)
+  html = html.replace(/<tr[^>]*>[\s\S]*?(?:기안자?|결\s*재|협\s*조|보안등급|생산부서|보존기간)[\s\S]*?<\/tr>/gi, '');
+
+  // ── 3. 제목 이후 본문 추출 ──
+  const titlePos = html.search(/제\s*목\s*[：:]/i);
+  const bodyHtml = titlePos > 0 ? html.slice(titlePos) : html;
+
+  // ── 4. 표 → [TABLE] 변환 ──
+  const structured = htmlToStructuredText(bodyHtml);
+
+  // ── 5. 노이즈 라인 필터링 ──
+  const lines = structured.split('\n');
+  const cleaned = lines.filter(line => {
+    const t = line.trim();
+    if (!t) return true;
+    if (/^\d{2}\.\d{2}\s*\|?\s*$/.test(t)) return false;       // "06.02" 같은 짧은 날짜
+    if (/^[\|\s]+$/.test(t)) return false;                      // | 만 있는 줄
+    if (/^(\|\s*){2,}$/.test(t)) return false;                  // 빈 셀 연속
+    if (/^제\s*목\s*[：:]/.test(t)) return false;               // "제 목 :" 레이블 줄
+    return true;
+  });
+
+  const bodyText = cleaned.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+  return (titleText ? '제목: ' + titleText + '\n\n' : '') + bodyText;
+}
+
+// ── HTML → 표 구조 보존 텍스트 ──────────────────────────────
+function htmlToStructuredText(html) {
+  let tableIdx = 0;
+  html = html.replace(/<table[\s\S]*?<\/table>/gi, (tableHtml) => {
+    tableIdx++;
+    const rows = [];
+    const trMatches = tableHtml.match(/<tr[^>]*>([\s\S]*?)<\/tr>/gi) || [];
+    for (const tr of trMatches) {
+      const cells = [];
+      const cellMatches = tr.match(/<t[hd][^>]*>([\s\S]*?)<\/t[hd]>/gi) || [];
+      for (const cell of cellMatches) {
+        cells.push(htmlToPlain(cell).replace(/\s+/g, ' ').trim());
+      }
+      const nonEmpty = cells.filter(c => c);
+      if (nonEmpty.length >= 2) rows.push(cells.join('|'));
+    }
+    if (!rows.length) return '';
+    if (rows.length > 1) {
+      return `\n[TABLE:표${tableIdx}]\n${rows.join('\n')}\n[/TABLE]\n`;
+    }
+    return '\n' + rows.join('\n') + '\n';
+  });
+
+  return html
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/p>/gi, '\n')
+    .replace(/<\/div>/gi, '\n')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/[ \t]+/g, ' ')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+function htmlToPlain(html) {
+  return html
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function decodeQP(str) {
+  const joined = str.replace(/=\r?\n/g, '');
+  let result = ''; let i = 0;
   while (i < joined.length) {
     if (joined[i] === '=' && i + 2 < joined.length && /[0-9A-Fa-f]{2}/.test(joined.slice(i+1, i+3))) {
-      // =XX 시퀀스 수집 (연속 멀티바이트 포함)
       const bytes = [];
       while (i < joined.length && joined[i] === '=' && /[0-9A-Fa-f]{2}/.test(joined.slice(i+1, i+3))) {
         bytes.push(parseInt(joined.slice(i+1, i+3), 16));
         i += 3;
       }
-      try {
-        result += Buffer.from(bytes).toString('utf-8');
-      } catch(e) {
-        result += bytes.map(b => String.fromCharCode(b)).join('');
-      }
-    } else {
-      result += joined[i];
-      i++;
-    }
+      try { result += Buffer.from(bytes).toString('utf-8'); }
+      catch(e) { result += bytes.map(b => String.fromCharCode(b)).join(''); }
+    } else { result += joined[i]; i++; }
   }
   return result;
-}
-
-function htmlToText(html) {
-  return html
-    .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
-    .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
-    .replace(/<br\s*\/?>/gi, '\n')
-    .replace(/<\/p>/gi, '\n')
-    .replace(/<\/tr>/gi, '\n')
-    .replace(/<\/th>/gi, ' | ')
-    .replace(/<\/td>/gi, ' | ')
-    .replace(/<[^>]+>/g, '')
-    .replace(/&nbsp;/g,  ' ')
-    .replace(/&amp;/g,   '&')
-    .replace(/&lt;/g,    '<')
-    .replace(/&gt;/g,    '>')
-    .replace(/&quot;/g,  '"')
-    .replace(/&#39;/g,   "'")
-    .replace(/[ \t]+/g,  ' ')
-    .replace(/\n{3,}/g,  '\n\n')
-    .trim();
 }
 
 function escapeRegex(str) {
