@@ -968,6 +968,7 @@ textarea { resize: vertical; min-height: 64px; line-height: 1.65; }
         <div class="stab on" id="regTab0" onclick="switchRegTab(0)" style="font-size:12px;">MHT 파일 업로드</div>
         <div class="stab"    id="regTab1" onclick="switchRegTab(1)" style="font-size:12px;">텍스트 붙여넣기</div>
         <div class="stab"    id="regTab2" onclick="switchRegTab(2)" style="font-size:12px;">직접 입력</div>
+        <div class="stab"    id="regTab3" onclick="switchRegTab(3)" style="font-size:12px;">✨ AI 초안</div>
       </div>
 
       <!-- 방식 A: MHT 업로드 -->
@@ -1019,6 +1020,22 @@ textarea { resize: vertical; min-height: 64px; line-height: 1.65; }
           직접 입력 화면으로 →
         </button>
       </div>
+
+      <!-- 방식 D: AI 초안 생성 -->
+      <div id="regPane3" style="display:none;">
+        <div style="font-size:12px;color:var(--t2);margin-bottom:10px;line-height:1.7;">
+          만들고 싶은 문서의 <strong>방향성이나 목적</strong>을 텍스트로 설명하면,<br>
+          기존 등록된 템플릿을 참고해 AI가 초안을 자동 생성합니다.
+        </div>
+        <textarea id="aiDraftPrompt" style="min-height:100px;font-size:12px;" placeholder="예시) 케이뱅크 CS센터 월간 운영현황 보고서 - SLA달성률, 특이사항 포함"></textarea>
+        <div style="margin-top:10px;">
+          <div class="flabel" style="margin-bottom:5px;">참고할 기존 템플릿 (선택)</div>
+          <select id="aiRefTpl" style="font-size:12px;width:100%;"></select>
+        </div>
+        <div style="margin-top:10px;text-align:right;">
+          <button class="btn solid" onclick="handleAIDraft()">AI 초안 생성</button>
+        </div>
+      </div>
     </div>
 
     <!-- STEP 2: AI 분석 중 -->
@@ -1030,13 +1047,15 @@ textarea { resize: vertical; min-height: 64px; line-height: 1.65; }
       <p>변동 필드와 자동계산 항목을 자동으로 감지합니다</p>
     </div>
 
-    <!-- STEP 3: 확인 및 수정 (B+A) -->
+    <!-- STEP 3: 새 편집 화면 (드래그 변수 지정 방식) -->
     <div id="mStep3" style="display:none;">
-      <div style="background:var(--green-bg);border-radius:var(--r-sm);padding:9px 13px;margin-bottom:16px;font-size:12px;color:var(--green-t);font-weight:600;">
-        ✓ AI 분석 완료 — 아래 내용을 확인·수정 후 저장하세요
+      <!-- 상단 알림 배너 (AI완료/직접입력 등 상황에 따라 변경) -->
+      <div id="s3Banner" style="background:var(--green-bg);border-radius:var(--r-sm);padding:9px 13px;margin-bottom:14px;font-size:12px;color:var(--green-t);font-weight:600;">
+        ✓ 본문에서 바꿀 부분을 드래그해서 변수로 지정하세요
       </div>
-      <!-- 기본 정보 -->
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
+
+      <!-- 기본 정보 (1줄 압축) -->
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px;margin-bottom:12px;">
         <div class="fg">
           <div class="flabel">문서명 *</div>
           <input type="text" id="m_name" placeholder="예: 위탁수수료 청구">
@@ -1046,11 +1065,7 @@ textarea { resize: vertical; min-height: 64px; line-height: 1.65; }
           <select id="m_center"></select>
         </div>
         <div class="fg">
-          <div class="flabel">마감일 (D-day 알림)</div>
-          <input type="text" id="m_deadline" placeholder="예: 매월 21일">
-        </div>
-        <div class="fg">
-          <div class="flabel">문서 유형 태그</div>
+          <div class="flabel">문서 유형</div>
           <select id="m_docType" style="font-size:13px;">
             <option value="">-- 선택 안함 --</option>
             <option value="청구서">청구서</option>
@@ -1061,51 +1076,104 @@ textarea { resize: vertical; min-height: 64px; line-height: 1.65; }
           </select>
         </div>
         <div class="fg">
-          <div class="flabel">제목 템플릿</div>
-          <input type="text" id="m_titleTpl" placeholder="예: 케이뱅크 위탁수수료 청구({{청구연월}})" oninput="detectBodyVars()">
+          <div class="flabel">마감일</div>
+          <input type="text" id="m_deadline" placeholder="예: 매월 21일">
         </div>
+      </div>
+      <div class="fg" style="margin-bottom:12px;">
+        <div class="flabel">제목 템플릿</div>
+        <input type="text" id="m_titleTpl" placeholder="예: 케이뱅크 위탁수수료 청구({{청구연월}})">
       </div>
       <div class="divider"></div>
 
-      <!-- 변동 필드 (B+A: AI감지 결과 + 직접 수정) -->
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
-        <div class="fs12 fw7">변동 필드</div>
-        <div class="flex gap6 items-center">
-          <span class="fs11 tc3">자동계산 수식: 필드키 사용 (예: 당월공급가액*0.1)</span>
+      <!-- 2단 레이아웃: 본문편집(좌) + 변수목록(우) -->
+      <div style="display:grid;grid-template-columns:1fr 300px;gap:14px;margin-top:12px;">
+
+        <!-- 좌: 본문 편집 영역 -->
+        <div>
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+            <div class="fs12 fw7">본문 템플릿</div>
+            <div style="font-size:11px;color:var(--blue-t);background:var(--blue-bg);
+              padding:3px 9px;border-radius:20px;font-weight:600;">
+              💡 바꿀 텍스트를 드래그 → 변수 지정
+            </div>
+          </div>
+          <!-- 드래그 감지용 contenteditable div (렌더용) -->
+          <div id="s3BodyDisplay" contenteditable="true"
+            style="min-height:220px;max-height:340px;overflow-y:auto;
+              padding:12px 14px;border:1px solid var(--border2);border-radius:var(--r);
+              font-family:monospace;font-size:12px;line-height:1.8;
+              background:var(--surface);white-space:pre-wrap;word-break:break-all;
+              cursor:text;outline:none;"
+            onmouseup="onBodySelectionEnd()"
+            onkeyup="syncBodyFromDisplay()"
+            placeholder="여기에 문서 본문이 표시됩니다...">
+          </div>
+          <!-- 숨겨진 실제 저장용 textarea -->
+          <textarea id="m_body" style="display:none;"></textarea>
+          <div style="font-size:11px;color:var(--t3);margin-top:5px;line-height:1.6;">
+            표 문법: <code style="background:var(--s2);padding:1px 4px;border-radius:3px;">[TABLE:이름] 헤더|컬럼 행 [/TABLE]</code> &nbsp;
+            AI분석: <code style="background:var(--s2);padding:1px 4px;border-radius:3px;">[AI_ANALYSIS]</code>
+          </div>
+        </div>
+
+        <!-- 우: 변수 목록 패널 -->
+        <div style="display:flex;flex-direction:column;gap:0;">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+            <div class="fs12 fw7">변수 목록</div>
+            <button class="btn sm" onclick="addMField()" style="font-size:11px;">+ 직접 추가</button>
+          </div>
+          <!-- 변수 지정 팝업 (드래그 후 표시) -->
+          <div id="varAssignBox" style="display:none;background:var(--blue-bg);border:1.5px solid var(--blue);
+            border-radius:var(--r);padding:10px 12px;margin-bottom:8px;">
+            <div style="font-size:11px;font-weight:700;color:var(--blue-t);margin-bottom:7px;">
+              선택된 텍스트를 변수로 지정
+            </div>
+            <div style="font-size:11px;color:var(--t2);margin-bottom:5px;">
+              선택값: <span id="varSelectedText" style="font-weight:600;color:var(--text);"></span>
+            </div>
+            <input type="text" id="varNewKey" placeholder="변수명 (예: 총인원)"
+              style="width:100%;margin-bottom:6px;font-size:12px;"
+              onkeydown="if(event.key==='Enter')confirmVarAssign()">
+            <div style="display:flex;gap:4px;margin-bottom:6px;">
+              <select id="varNewType" style="flex:1;font-size:11px;">
+                <option value="text">텍스트</option>
+                <option value="amount">금액</option>
+                <option value="calc">자동계산</option>
+              </select>
+              <label style="display:flex;align-items:center;gap:3px;font-size:11px;white-space:nowrap;">
+                <input type="checkbox" id="varNewAutoFill" checked style="width:13px;height:13px;">자동채움
+              </label>
+            </div>
+            <!-- calc 수식 입력 (calc 선택 시 표시) -->
+            <div id="varCalcRow" style="display:none;margin-bottom:6px;">
+              <input type="text" id="varNewFormula" placeholder="수식 (예: 당월공급가액*0.1)"
+                style="width:100%;font-size:11px;">
+            </div>
+            <div style="display:flex;gap:5px;">
+              <button class="btn sm" onclick="cancelVarAssign()" style="flex:1;">취소</button>
+              <button class="btn solid sm" onclick="confirmVarAssign()" style="flex:1;">지정</button>
+            </div>
+          </div>
+
+          <!-- 등록된 변수 목록 -->
+          <div id="m_fieldList" style="flex:1;overflow-y:auto;max-height:260px;
+            border:1px solid var(--border);border-radius:var(--r);padding:4px;"></div>
+
+          <!-- 자동계산 필드 섹션 -->
+          <div style="margin-top:8px;">
+            <div style="font-size:11px;font-weight:700;color:var(--t2);margin-bottom:5px;">자동계산 수식 편집</div>
+            <div id="m_calcList" style="border:1px solid var(--border);border-radius:var(--r);
+              padding:4px;max-height:120px;overflow-y:auto;">
+              <div style="font-size:11px;color:var(--t3);padding:6px;">자동계산 필드 없음</div>
+            </div>
+          </div>
         </div>
       </div>
-      <!-- 컬럼 헤더 -->
-      <div class="field-editor-grid" style="margin-bottom:4px;">
-        <span class="fs11 tc3">필드 키</span>
-        <span class="fs11 tc3">표시명</span>
-        <span class="fs11 tc3">타입</span>
-        <span class="fs11 tc3">힌트 / 수식</span>
-        <span class="fs11 tc3" style="text-align:center;">자동채움</span>
-        <span></span>
-      </div>
-      <div id="m_fieldList" style="margin-bottom:8px;max-height:240px;overflow-y:auto;"></div>
-      <button class="btn sm" onclick="addMField()" style="margin-bottom:16px;">+ 필드 추가</button>
-      <div class="divider"></div>
 
-      <!-- 본문 템플릿 -->
-      <div class="fs12 fw7" style="margin-bottom:6px;">본문 템플릿</div>
-      <div class="fs11 tc3" style="margin-bottom:8px;line-height:1.7;">
-        변동 필드: <code style="background:var(--s2);padding:1px 5px;border-radius:3px;">{{필드키}}</code> &nbsp;
-        표: <code style="background:var(--s2);padding:1px 5px;border-radius:3px;">[TABLE:이름] 헤더|컬럼 행 [/TABLE]</code> &nbsp;
-        AI분석 위치: <code style="background:var(--s2);padding:1px 5px;border-radius:3px;">[AI_ANALYSIS]</code>
-      </div>
-      <textarea id="m_body" style="min-height:180px;font-size:12px;font-family:monospace;" oninput="detectBodyVars()"></textarea>
-      <!-- 감지된 {{변수}} → 클릭으로 필드 자동추가 -->
-      <div id="bodyVarPanel" style="display:none;margin-top:8px;">
-        <div style="font-size:11px;font-weight:600;color:var(--t2);margin-bottom:6px;display:flex;align-items:center;gap:6px;">
-          본문에서 감지된 변수 — 클릭하면 필드 자동 추가 / 초록색은 이미 등록됨
-        </div>
-        <div id="bodyVarList" style="display:flex;flex-wrap:wrap;gap:5px;"></div>
-      </div>
-
-      <div style="display:flex;gap:8px;margin-top:16px;justify-content:flex-end;">
+      <div style="display:flex;gap:8px;margin-top:16px;justify-content:flex-end;border-top:1px solid var(--border);padding-top:12px;">
         <button class="btn" onclick="closeTplModal()">취소</button>
-        <button class="btn solid" onclick="saveTpl()">저장</button>
+        <button class="btn solid" onclick="saveTpl()">💾 저장</button>
       </div>
     </div>
   </div>
@@ -2808,12 +2876,9 @@ function editCurrentTpl() {
     `<option value="${c.id}" ${c.id === tpl.centerId ? 'selected' : ''}>${c.name}</option>`
   ).join('');
   mFields = tpl.fields.map(f => ({ ...f }));
-  renderMFields();
   document.getElementById('tplModalTitle').textContent = '템플릿 수정';
-  showStep3();
   document.getElementById('tplModal').classList.add('open');
-  // 본문 변수 감지 실행 (기존 본문에서 변수 목록 즉시 표시)
-  setTimeout(detectBodyVars, 50);
+  showStep3('✏️ 템플릿 수정 — 드래그로 변수 추가, 변수 목록에서 타입 변경 가능');
 }
 
 // ══ 템플릿 모달 ══
@@ -2824,42 +2889,57 @@ function openTplModal() {
   ['m_name','m_titleTpl','m_deadline','m_body'].forEach(id => document.getElementById(id).value = '');
   const sel = document.getElementById('m_center');
   sel.innerHTML = S.centers.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
-  renderMFields();
+  mFields = [];
   document.getElementById('tplModalTitle').textContent = '새 템플릿 등록';
   document.getElementById('mStep1').style.display = 'block';
   document.getElementById('mStep2').style.display = 'none';
   document.getElementById('mStep3').style.display = 'none';
   document.getElementById('mhtInput').value = '';
-  // 변수 감지 패널 초기화
-  const vp = document.getElementById('bodyVarPanel');
-  if (vp) vp.style.display = 'none';
   const dtEl = document.getElementById('m_docType');
   if (dtEl) dtEl.value = '';
+  const vab = document.getElementById('varAssignBox');
+  if (vab) vab.style.display = 'none';
+  const disp = document.getElementById('s3BodyDisplay');
+  if (disp) disp.innerHTML = '';
   document.getElementById('tplModal').classList.add('open');
 }
 function closeTplModal() { document.getElementById('tplModal').classList.remove('open'); }
-function showStep3() {
+function showStep3(banner) {
   document.getElementById('mStep1').style.display = 'none';
   document.getElementById('mStep2').style.display = 'none';
   document.getElementById('mStep3').style.display = 'block';
-  // 본문 템플릿 textarea에 공통 스타일 자동 적용 (WYSIWYG 느낌)
-  const ta = document.getElementById('m_body');
-  if (ta) {
-    ta.style.fontFamily  = S.cfg.font  || 'Malgun Gothic';
-    ta.style.fontSize    = S.cfg.fsize || '12pt';
-    ta.style.lineHeight  = S.cfg.lh    || '200%';
-  }
-  // 변수 감지 실행
-  setTimeout(detectBodyVars, 50);
+  // 배너 메시지
+  const bannerEl = document.getElementById('s3Banner');
+  if (bannerEl && banner) bannerEl.textContent = banner;
+  // m_body → s3BodyDisplay 동기화
+  syncBodyToDisplay();
+  renderMFields();
+  renderCalcList();
 }
-function showStep3Direct() { S.editMode = false; renderMFields(); showStep3(); }
+function showStep3Direct() {
+  S.editMode = false;
+  mFields = [];
+  document.getElementById('m_body').value = '';
+  showStep3('✏️ 본문을 직접 입력하고, 바꿀 텍스트를 드래그해서 변수로 지정하세요');
+}
 
 // 템플릿 등록 방식 탭 전환
 function switchRegTab(idx) {
-  [0,1,2].forEach(i => {
+  [0,1,2,3].forEach(i => {
     document.getElementById('regTab' + i)?.classList.toggle('on', i === idx);
-    document.getElementById('regPane' + i).style.display = i === idx ? 'block' : 'none';
+    const pane = document.getElementById('regPane' + i);
+    if (pane) pane.style.display = i === idx ? 'block' : 'none';
   });
+  if (idx === 3) {
+    const sel = document.getElementById('aiRefTpl');
+    if (sel) {
+      sel.innerHTML = '<option value="">-- 전체 템플릿 참고 --</option>'
+        + S.templates.map(t => {
+          const cn = S.centers.find(c => c.id === t.centerId)?.name || '기본';
+          return '<option value="' + t.id + '">[' + cn + '] ' + t.name + '</option>';
+        }).join('');
+    }
+  }
 }
 
 // MHT 파일 처리 + AI 분석 (B단계)
@@ -2933,8 +3013,7 @@ ${clean}
     document.getElementById('m_name').value = '새 문서';
     mFields = [{ key:'청구연월', label:'청구 연월', type:'text', placeholder:'예: 26년6월', formula:'', autoFill:false }];
   }
-  renderMFields();
-  showStep3();
+  showStep3('✓ AI 분석 완료 — 바꿀 텍스트를 드래그해서 변수를 추가하거나 수정하세요');
 }
 
 // 담당자 정보 확인 UI (Step3 상단에 표시)
@@ -3079,7 +3158,14 @@ async function analyzeMultiSameType(results) {
   const data   = await resp.json();
   const rawTxt = (data.content && data.content[0] && data.content[0].text) || '';
   const txt    = rawTxt.replace(/```json[\s\S]*?```|```/g, '').trim();
-  const parsed = JSON.parse(txt);
+  let parsed;
+  try { parsed = JSON.parse(txt); }
+  catch(e) {
+    // JSON 부분 추출 시도
+    const m = txt.match(/\{[\s\S]*\}/);
+    if (m) parsed = JSON.parse(m[0]);
+    else throw e;
+  }
   document.getElementById('m_name').value     = parsed.docName || '';
   document.getElementById('m_titleTpl').value = parsed.titleTemplate || '';
   document.getElementById('m_body').value     = parsed.bodyTemplate || '';
@@ -3195,180 +3281,279 @@ async function handleMHT(file) {
 // 모달 필드 목록 렌더
 function escQ(s) { return String(s || '').replace(/"/g, '&quot;'); }
 function renderMFields() {
-  document.getElementById('m_fieldList').innerHTML = mFields.map((f, i) => {
-    const isCalc = f.type === 'calc';
-    const checked = isCalc ? false : (f.autoFill !== false);
-    // 자동채움 체크박스 (calc 제외)
-    const chkHtml = isCalc
-      ? '<span style="display:flex;justify-content:center;color:var(--t3);font-size:11px;">—</span>'
-      : '<label style="display:flex;justify-content:center;align-items:center;cursor:pointer;">'
-        + '<input type="checkbox" ' + (checked ? 'checked' : '')
-        + ' onchange="mFields[' + i + '].autoFill=this.checked"'
-        + ' style="width:15px;height:15px;cursor:pointer;"></label>';
-
-    // 수식 빌더 (calc) 또는 힌트 입력 (일반)
-    let formulaHtml = '';
-    if (isCalc) {
-      formulaHtml = buildFormulaUI(i, f);
-    } else {
-      formulaHtml = '<input type="text" placeholder="입력 힌트"'
-         + ' value="' + escQ(f.placeholder || '') + '"'
-        + ' oninput="mFields[' + i + '].placeholder=this.value"'
-        + ' style="font-size:12px;">';
-    }
-
-    return '<div class="field-editor-grid">'
-      + '<input type="text" placeholder="필드 키"'
-         + ' value="' + escQ(f.key || '') + '"'
-        + ' oninput="mFields[' + i + '].key=this.value;renderMFields()" style="font-size:12px;">'
-      + '<input type="text" placeholder="표시명"'
-         + ' value="' + escQ(f.label || '') + '"'
-        + ' oninput="mFields[' + i + '].label=this.value" style="font-size:12px;">'
-      + '<select onchange="mFields[' + i + '].type=this.value;renderMFields()" style="font-size:12px;">'
-        + '<option value="text"'   + (f.type === 'text'   ? ' selected' : '') + '>텍스트</option>'
-        + '<option value="amount"' + (f.type === 'amount' ? ' selected' : '') + '>금액</option>'
-        + '<option value="calc"'   + (f.type === 'calc'   ? ' selected' : '') + '>자동계산</option>'
+  const el = document.getElementById('m_fieldList');
+  if (!el) return;
+  const nonCalc = mFields.filter(f => f.type !== 'calc');
+  if (!nonCalc.length) {
+    el.innerHTML = '<div style="font-size:11px;color:var(--t3);padding:10px 8px;">드래그로 변수를 지정하거나 "+ 직접 추가"를 클릭하세요</div>';
+    return;
+  }
+  el.innerHTML = nonCalc.map((f, ri) => {
+    const i = mFields.indexOf(f);
+    const checked = f.autoFill !== false;
+    return '<div style="display:flex;align-items:center;gap:5px;padding:5px 7px;'
+      + 'border-bottom:1px solid var(--border);font-size:11px;">'
+      + '<div style="flex:1;min-width:0;">'
+      + '<span style="font-weight:600;color:var(--blue-t);">{{' + escQ(f.key) + '}}</span>'
+      + '<span style="color:var(--t3);margin-left:4px;">' + escQ(f.label || f.key) + '</span>'
+      + '</div>'
+      + '<select onchange="mFields[' + i + '].type=this.value;renderMFields();renderCalcList()" '
+        + 'style="font-size:10px;padding:2px 3px;border:1px solid var(--border2);border-radius:3px;width:52px;">'
+        + '<option value="text"'   + (f.type==='text'   ?' selected':'') + '>텍스트</option>'
+        + '<option value="amount"' + (f.type==='amount' ?' selected':'') + '>금액</option>'
       + '</select>'
-      + formulaHtml
-      + chkHtml
-      + '<button class="btn danger sm" onclick="mFields.splice(' + i + ',1);renderMFields()">✕</button>'
+      + '<label style="display:flex;align-items:center;gap:2px;cursor:pointer;white-space:nowrap;">'
+        + '<input type="checkbox" ' + (checked?'checked':'') + ' onchange="mFields[' + i + '].autoFill=this.checked" style="width:12px;height:12px;">'
+        + '<span style="color:var(--t3);">자동</span></label>'
+      + '<button onclick="mFields.splice(' + i + ',1);renderMFields();renderCalcList();syncBodyFromMFields()" '
+        + 'style="background:none;border:none;color:var(--red);cursor:pointer;font-size:13px;padding:0 2px;line-height:1;">✕</button>'
+      + '</div>';
+  }).join('');
+}
+
+function renderCalcList() {
+  const el = document.getElementById('m_calcList');
+  if (!el) return;
+  const calcs = mFields.filter(f => f.type === 'calc');
+  if (!calcs.length) {
+    el.innerHTML = '<div style="font-size:11px;color:var(--t3);padding:6px;">자동계산 필드 없음</div>';
+    return;
+  }
+  el.innerHTML = calcs.map((f, ri) => {
+    const i = mFields.indexOf(f);
+    return '<div style="padding:5px 7px;border-bottom:1px solid var(--border);font-size:11px;">'
+      + '<div style="display:flex;align-items:center;gap:5px;margin-bottom:4px;">'
+        + '<span style="font-weight:600;color:var(--purple);">{{' + escQ(f.key) + '}}</span>'
+        + '<span style="color:var(--t3);">자동계산</span>'
+        + '<button onclick="mFields.splice(' + i + ',1);renderCalcList();renderMFields()" '
+          + 'style="background:none;border:none;color:var(--red);cursor:pointer;margin-left:auto;font-size:12px;">✕</button>'
+      + '</div>'
+      + '<div style="display:flex;gap:4px;align-items:center;">'
+        + '<input type="text" value="' + escQ(f.key) + '" placeholder="필드키" '
+          + 'oninput="mFields[' + i + '].key=this.value" '
+          + 'style="width:80px;font-size:11px;padding:3px 5px;">'
+        + '<span style="color:var(--t3);">=</span>'
+        + '<input type="text" value="' + escQ(f.formula||'') + '" placeholder="예: 당월공급가액*0.1" '
+          + 'oninput="mFields[' + i + '].formula=this.value" '
+          + 'style="flex:1;font-size:11px;padding:3px 5px;">'
+      + '</div>'
     + '</div>';
   }).join('');
 }
 
-// 수식 빌더 UI 생성
-function buildFormulaUI(idx, f) {
-  var availKeys = mFields.filter(function(ff) {
-    return ff.type !== 'calc' && ff.key;
-  }).map(function(ff) { return ff.key; });
-
-  var fml   = f.formula || '';
-  var mat   = fml.match(/^([^+\-*/]+)([+\-*/])(.+)$/);
-  var selA  = mat ? mat[1].trim() : '';
-  var selOp = mat ? mat[2] : '*';
-  var selB  = mat ? mat[3].trim() : '0.1';
-
-  function makeOpts(sel) {
-    var h = '<option value="">-- 필드 선택 --</option>';
-    availKeys.forEach(function(k) {
-      h += '<option value="' + escQ(k) + '"' + (k === sel ? ' selected' : '') + '>' + k + '</option>';
+// 본문 textarea → display 동기화 ({{변수}} 하이라이트 포함)
+function syncBodyToDisplay() {
+  const ta = document.getElementById('m_body');
+  const disp = document.getElementById('s3BodyDisplay');
+  if (!ta || !disp) return;
+  const raw = ta.value;
+  // {{변수}} 하이라이트
+  const html = raw
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/\{\{([^}]+)\}\}/g, (m, k) => {
+      const isCfg = k.startsWith('cfg_') || k === '붙임연월';
+      const col = isCfg ? 'var(--t3)' : 'var(--blue-t)';
+      const bg  = isCfg ? 'var(--s3)' : 'var(--blue-bg)';
+      return '<mark style="background:'+bg+';color:'+col+';border-radius:3px;padding:0 2px;font-weight:600;">{{'+k+'}}</mark>';
     });
-    [['0.1','0.1 (10%)'],['0.11','0.11 (11%)'],['1','1 (고정)']].forEach(function(e) {
-      h += '<option value="' + e[0] + '"' + (e[0] === sel ? ' selected' : '') + '>' + e[1] + '</option>';
-    });
-    return h;
-  }
-  function makeOpOpts(sel) {
-    return ['+','-','*','/'].map(function(o) {
-      return '<option value="' + o + '"' + (o === sel ? ' selected' : '') + '>' + o + '</option>';
-    }).join('');
-  }
-
-  var wrap = 'style="display:flex;gap:4px;align-items:center;flex:1;"';
-  var st   = 'style="font-size:11px;padding:4px;border:1px solid var(--border2);border-radius:var(--r-sm);';
-
-  var h = '<div ' + wrap + '>';
-  h += '<select data-fidx="' + idx + '" data-part="op_a" onchange="buildFormula(+this.dataset.fidx,this.value,this.dataset.part)" ' + st + 'flex:1;">' + makeOpts(selA) + '</select>';
-  h += '<select data-fidx="' + idx + '" data-part="op"   onchange="buildFormula(+this.dataset.fidx,this.value,this.dataset.part)" ' + st + 'width:42px;">' + makeOpOpts(selOp) + '</select>';
-  h += '<select data-fidx="' + idx + '" data-part="op_b" onchange="buildFormula(+this.dataset.fidx,this.value,this.dataset.part)" ' + st + 'flex:1;">' + makeOpts(selB) + '</select>';
-  h += '<input type="text" placeholder="직접입력" value="' + escQ(fml) + '" data-fidx="' + idx + '" oninput="mFields[+this.dataset.fidx].formula=this.value" ' + st + 'width:80px;border-style:dashed;">';
-  h += '</div>';
-  return h;
+  disp.innerHTML = html;
 }
 
-
-
-// 수식 빌더: 드롭다운 선택으로 formula 자동 조합
-function buildFormula(idx, val, part) {
-  const f = mFields[idx];
-  if (!f) return;
-  const fml = f.formula || '';
-  const parsed = fml.match(/^([^+\-*/]+)([+\-*/])(.+)$/) || ['','','*','0.1'];
-  let a = parsed[1]?.trim() || '';
-  let op = parsed[2] || '*';
-  let b = parsed[3]?.trim() || '0.1';
-  if (part === 'op_a') a = val;
-  if (part === 'op')   op = val;
-  if (part === 'op_b') b = val;
-  if (a && b) {
-    f.formula = `${a}${op}${b}`;
-    // 직접입력 필드도 동기화
-    const directInput = document.querySelectorAll('.field-editor-grid')[idx]
-      ?.querySelector('input[placeholder="수식 직접입력"]');
-    if (directInput) directInput.value = f.formula;
-  }
+// display 편집 → textarea 동기화
+function syncBodyFromDisplay() {
+  const ta = document.getElementById('m_body');
+  const disp = document.getElementById('s3BodyDisplay');
+  if (!ta || !disp) return;
+  // mark 태그를 {{키}} 텍스트로 복원
+  let html = disp.innerHTML;
+  html = html.replace(/<mark[^>]*>\{\{([^}]+)\}\}<\/mark>/g, '{{$1}}');
+  // 나머지 HTML → 텍스트 변환
+  const tmp = document.createElement('div');
+  tmp.innerHTML = html;
+  ta.value = tmp.innerText || tmp.textContent || '';
 }
+
+// 변수 삭제 시 본문의 {{키}} 제거
+function syncBodyFromMFields() {
+  syncBodyToDisplay();
+}
+
+// 드래그 선택 완료 → 변수 지정 팝업 표시
+function onBodySelectionEnd() {
+  const sel = window.getSelection();
+  if (!sel || sel.isCollapsed) return;
+  const selected = sel.toString().trim();
+  if (!selected || selected.length < 1) return;
+  // 이미 {{변수}} 형태면 무시
+  if (/^\{\{[^}]+\}\}$/.test(selected)) return;
+
+  window._varSelection = { text: selected };
+  document.getElementById('varSelectedText').textContent = '"' + selected + '"';
+  // 변수명 자동 추론
+  document.getElementById('varNewKey').value = guessVarKey(selected);
+  document.getElementById('varNewType').value = guessVarType(selected);
+  document.getElementById('varNewAutoFill').checked = guessAutoFill(selected);
+  document.getElementById('varCalcRow').style.display = 'none';
+  document.getElementById('varAssignBox').style.display = 'block';
+  setTimeout(() => document.getElementById('varNewKey').focus(), 50);
+}
+
+// 변수 타입 자동 추론
+function guessVarKey(text) {
+  if (/^\d{4}[.\s]\d{1,2}[.\s]\d{1,2}/.test(text)) return '청구기간';
+  if (/^\d{2,4}년\s*\d{1,2}월/.test(text)) return '청구연월';
+  if (/^\d+[,\d]*원?$/.test(text.replace(/,/g,''))) return '당월공급가액';
+  if (/^\d+명$/.test(text)) return '총인원';
+  return '';
+}
+function guessVarType(text) {
+  const clean = text.replace(/,/g,'').replace(/원/,'');
+  if (/^\d+$/.test(clean) && parseInt(clean) > 10000) return 'amount';
+  return 'text';
+}
+function guessAutoFill(text) {
+  if (/년|월|기간|일/.test(text)) return false;
+  return true;
+}
+
+// 변수 지정 확정
+function confirmVarAssign() {
+  const key = document.getElementById('varNewKey').value.trim();
+  if (!key) { document.getElementById('varNewKey').focus(); return; }
+  const type = document.getElementById('varNewType').value;
+  const autoFill = document.getElementById('varNewAutoFill').checked;
+  const formula = document.getElementById('varNewFormula')?.value.trim() || '';
+  const selectedText = window._varSelection?.text || '';
+
+  // 중복 체크
+  const exists = mFields.find(f => f.key === key);
+
+  if (!exists) {
+    mFields.push({ key, label: key, type, placeholder: '', formula, autoFill });
+  }
+
+  // 본문에서 선택된 텍스트를 {{키}}로 교체
+  const ta = document.getElementById('m_body');
+  const disp = document.getElementById('s3BodyDisplay');
+  if (ta && selectedText) {
+    // textarea 기준으로 교체 (첫 번째 매칭만)
+    ta.value = ta.value.replace(selectedText, '{{' + key + '}}');
+    syncBodyToDisplay();
+    // 또는 display 기준 selection 교체
+    const sel = window.getSelection();
+    if (sel && !sel.isCollapsed) {
+      try {
+        const range = sel.getRangeAt(0);
+        range.deleteContents();
+        const mark = document.createElement('mark');
+        mark.style.cssText = 'background:var(--blue-bg);color:var(--blue-t);border-radius:3px;padding:0 2px;font-weight:600;';
+        mark.textContent = '{{' + key + '}}';
+        range.insertNode(mark);
+        sel.removeAllRanges();
+        syncBodyFromDisplay();
+        syncBodyToDisplay();
+      } catch(e) { /* fallback: textarea 교체로 충분 */ }
+    }
+  }
+
+  renderMFields();
+  renderCalcList();
+  cancelVarAssign();
+  gToast('"' + key + '" 변수 지정됨');
+}
+
+function cancelVarAssign() {
+  document.getElementById('varAssignBox').style.display = 'none';
+  window._varSelection = null;
+  if (window.getSelection) window.getSelection().removeAllRanges();
+}
+
+// varNewType 변경 → calc 수식 행 표시/숨김
+document.addEventListener('DOMContentLoaded', function() {
+  const vt = document.getElementById('varNewType');
+  if (vt) vt.addEventListener('change', function() {
+    document.getElementById('varCalcRow').style.display = this.value === 'calc' ? 'block' : 'none';
+  });
+});
+
 function addMField() {
-  mFields.push({ key:'', label:'', type:'text', placeholder:'', formula:'', autoFill:true });
+  document.getElementById('varAssignBox').style.display = 'none';
+  // 빈 calc 필드 직접 추가
+  const key = prompt('추가할 필드 키 입력 (예: 부가세, 청구총액)');
+  if (!key) return;
+  const type = confirm('"' + key + '" 자동계산(수식) 필드로 추가할까요?\n취소: 일반 텍스트/금액 필드') ? 'calc' : 'text';
+  mFields.push({ key, label: key, type, placeholder: '', formula: '', autoFill: type !== 'calc' });
   renderMFields();
+  renderCalcList();
+  gToast('"' + key + '" 필드 추가됨');
 }
 
-// 템플릿 저장 (신규 + 수정 통합)
-// 본문에서 {{변수}} 감지 → 클릭으로 필드 자동추가
-function detectBodyVars() {
-  const body  = document.getElementById('m_body')?.value  || '';
-  const title = document.getElementById('m_titleTpl')?.value || '';
-  const combined = body + ' ' + title;
+// AI 초안 생성 (방향성 텍스트 → 기존 템플릿 참고)
+async function handleAIDraft() {
+  const prompt = document.getElementById('aiDraftPrompt')?.value.trim();
+  if (!prompt) { gToast('방향성 텍스트를 입력하세요'); return; }
 
-  // {{변수명}} 패턴 추출 (cfg_ 시스템 변수 제외)
-  const matches = [...combined.matchAll(/\{\{([^}]+)\}\}/g)]
-    .map(m => m[1].trim())
-    .filter(k => !k.startsWith('cfg_') && k !== '붙임연월');
-  const unique = [...new Set(matches)];
+  document.getElementById('mStep1').style.display = 'none';
+  document.getElementById('mStep2').style.display = 'block';
 
-  // 이미 필드로 등록된 키
-  const registered = new Set(mFields.map(f => f.key));
+  // 참고 템플릿 수집
+  const refId = document.getElementById('aiRefTpl')?.value;
+  const refTpls = refId
+    ? S.templates.filter(t => t.id === refId)
+    : S.templates.slice(0, 3);
+  const refText = refTpls.map(t =>
+    '=== 참고 템플릿: ' + t.name + ' ===\n본문:\n' + (t.bodyTemplate || '').slice(0, 800)
+  ).join('\n\n');
 
-  const panel   = document.getElementById('bodyVarPanel');
-  const listEl  = document.getElementById('bodyVarList');
-  if (!unique.length) { panel.style.display = 'none'; return; }
+  const guide = S.cfg.guide || '';
+  const fullPrompt = (guide ? guide + '\n\n' : '')
+    + '다음 요청에 맞는 문서 템플릿을 생성하세요. JSON만 응답.\n\n'
+    + '요청:\n' + prompt + '\n\n'
+    + (refText ? '참고 기존 템플릿:\n' + refText + '\n\n' : '')
+    + '응답 형식:\n'
+    + '{"docName":"문서명","titleTemplate":"제목({{변수}})","fields":[{"key":"키","label":"표시명","type":"text|amount|calc","placeholder":"힌트","formula":"","autoFill":true}],"bodyTemplate":"본문"}';
 
-  panel.style.display = 'block';
-  listEl.innerHTML = unique.map(key => {
-    const exists = registered.has(key);
-    return `<span onclick="${exists ? '' : `quickAddField('${key}')`}"
-      style="display:inline-flex;align-items:center;gap:4px;
-        padding:4px 10px;border-radius:20px;font-size:11px;font-weight:600;cursor:${exists?'default':'pointer'};
-        background:${exists ? 'var(--green-bg)' : 'var(--blue-bg)'};
-        color:${exists ? 'var(--green-t)' : 'var(--blue-t)'};
-        border:1px solid ${exists ? 'rgba(10,122,84,.2)' : 'rgba(24,96,196,.2)'};
-        transition:opacity .12s;" ${exists ? '' : 'title="클릭하면 필드로 추가"'}
-        onmouseover="if(!${exists})this.style.opacity='.7'"
-        onmouseout="this.style.opacity='1'">
-      ${exists
-        ? `<svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5" style="width:10px;height:10px;"><polyline points="20 6 9 17 4 12"/></svg>`
-        : `<svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5" style="width:10px;height:10px;"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>`}
-      ${key}
-    </span>`;
-  }).join('');
-}
-
-// 클릭으로 필드 빠른 추가 — 타입 자동 추론
-function quickAddField(key) {
-  // 타입 자동 추론 규칙
-  let type = 'text', placeholder = '', formula = '', autoFill = true;
-  if (/공급가액|금액|수수료|도급비|청구액/.test(key)) {
-    type = 'amount'; placeholder = '숫자만 입력';
-  } else if (/부가세/.test(key)) {
-    type = 'calc'; formula = key.replace('부가세','') + '공급가액*0.1';
-    if (!formula.startsWith('당월')) formula = '당월공급가액*0.1';
-  } else if (/차액|차이|증감/.test(key)) {
-    type = 'calc'; formula = '당월공급가액-전월공급가액';
-  } else if (/합계|합산|총액|청구총액/.test(key)) {
-    type = 'calc'; formula = '당월공급가액+부가세';
-  } else if (/연월|기간|날짜|일자|일$/.test(key)) {
-    autoFill = false;  // 날짜류는 매번 새로 입력
-  } else if (/인원|명수|수$/.test(key)) {
-    placeholder = '예: 62명';
+  try {
+    const resp = await fetch('/api/claude', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 4000,
+        messages: [{ role: 'user', content: fullPrompt }] })
+    });
+    const data = await resp.json();
+    const txt = (data.content?.[0]?.text || '').replace(/```json[\s\S]*?```|```/g, '').trim();
+    const parsed = JSON.parse(txt);
+    document.getElementById('m_name').value     = parsed.docName || '';
+    document.getElementById('m_titleTpl').value = parsed.titleTemplate || '';
+    document.getElementById('m_body').value     = parsed.bodyTemplate || '';
+    mFields = parsed.fields || [];
+  } catch(e) {
+    document.getElementById('m_name').value = '새 문서 초안';
+    mFields = [{ key:'청구연월', label:'청구 연월', type:'text', placeholder:'예: 26년6월', formula:'', autoFill:false }];
   }
+  showStep3('✨ AI 초안 생성 완료 — 바꿀 텍스트를 드래그해서 변수를 추가하거나 수정하세요');
+}
 
-  mFields.push({ key, label: key, type, placeholder, formula, autoFill });
-  renderMFields();
-  detectBodyVars(); // 등록 상태 즉시 반영
-  gToast(`"${key}" 필드 추가됨`);
+// detectBodyVars 하위 호환 (analyzeDocText 등에서 호출)
+function detectBodyVars() { syncBodyToDisplay(); }
+
+// quickAddField 하위 호환
+function quickAddField(key) {
+  let type = 'text', formula = '', autoFill = true;
+  if (/공급가액|금액|수수료|도급비|청구액/.test(key)) { type = 'amount'; }
+  else if (/부가세/.test(key)) { type = 'calc'; formula = '당월공급가액*0.1'; }
+  else if (/차액|차이|증감/.test(key)) { type = 'calc'; formula = '당월공급가액-전월공급가액'; }
+  else if (/합계|합산|총액|청구총액/.test(key)) { type = 'calc'; formula = '당월공급가액+부가세'; }
+  else if (/연월|기간|날짜|일자|일$/.test(key)) { autoFill = false; }
+  if (!mFields.find(f => f.key === key)) {
+    mFields.push({ key, label: key, type, placeholder: '', formula, autoFill });
+    renderMFields(); renderCalcList();
+    gToast('"' + key + '" 필드 추가됨');
+  }
 }
 
 function saveTpl() {
+  // display → textarea 최종 동기화
+  syncBodyFromDisplay();
   const name     = document.getElementById('m_name').value.trim();
   const centerId = document.getElementById('m_center').value;
   const deadline = document.getElementById('m_deadline').value.trim();
