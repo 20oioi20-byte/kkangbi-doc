@@ -2910,10 +2910,18 @@ function showStep3(banner) {
   document.getElementById('mStep1').style.display = 'none';
   document.getElementById('mStep2').style.display = 'none';
   document.getElementById('mStep3').style.display = 'block';
-  // 배너 메시지
   const bannerEl = document.getElementById('s3Banner');
   if (bannerEl && banner) bannerEl.textContent = banner;
-  // m_body → s3BodyDisplay 동기화
+  // MHT 스타일이 있으면 설정에 자동 반영
+  if (window._mhtStyle) {
+    const st = window._mhtStyle;
+    if (st.fontSize)   S.cfg.fsize  = st.fontSize;
+    if (st.fontFamily) S.cfg.font   = st.fontFamily;
+    if (st.lineHeight) S.cfg.lh     = st.lineHeight;
+    window._mhtStyle = null; // 1회 적용 후 초기화
+    // 배너에 스타일 적용 안내 추가
+    if (bannerEl) bannerEl.textContent += '  |  폰트: ' + st.fontFamily + ' ' + st.fontSize + ' / 줄간격: ' + st.lineHeight;
+  }
   syncBodyToDisplay();
   renderMFields();
   renderCalcList();
@@ -3272,8 +3280,11 @@ async function handleMHT(file) {
       body: JSON.stringify({ type: 'parse_mht', content: raw })
     });
     if (!resp.ok) throw new Error('서버 파싱 실패');
-    const { clean } = await resp.json();
+    const result = await resp.json();
+    const clean = result.clean || result; // 하위 호환
     if (!clean || clean.length < 10) throw new Error('파싱 결과 없음');
+    // MHT에서 추출한 스타일 저장 → Step3에서 적용
+    if (result.style) window._mhtStyle = result.style;
     await analyzeDocText(clean);
   } catch(e) {
     // fallback: 브라우저 QP 파싱
@@ -3360,31 +3371,120 @@ function syncBodyToDisplay() {
   const ta = document.getElementById('m_body');
   const disp = document.getElementById('s3BodyDisplay');
   if (!ta || !disp) return;
+
+  // 설정에서 폰트 스타일 적용
+  const cfg = S.cfg;
+  disp.style.fontFamily = cfg.font  || 'Malgun Gothic';
+  disp.style.fontSize   = cfg.fsize || '12pt';
+  disp.style.lineHeight = cfg.lh    || '200%';
+
   const raw = ta.value;
-  // {{변수}} 하이라이트
-  const html = raw
-    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
-    .replace(/\{\{([^}]+)\}\}/g, (m, k) => {
-      const isCfg = k.startsWith('cfg_') || k === '붙임연월';
-      const col = isCfg ? 'var(--t3)' : 'var(--blue-t)';
-      const bg  = isCfg ? 'var(--s3)' : 'var(--blue-bg)';
-      return '<mark style="background:'+bg+';color:'+col+';border-radius:3px;padding:0 2px;font-weight:600;">{{'+k+'}}</mark>';
-    });
+  const lines = raw.split('\n');
+  let html = '';
+  let i = 0;
+
+  while (i < lines.length) {
+    const ln = lines[i];
+
+    // [TABLE:이름] 블록 → HTML 표 렌더링
+    if (ln.trim().startsWith('[TABLE:')) {
+      i++;
+      const rows = [];
+      while (i < lines.length && !lines[i].trim().startsWith('[/TABLE]')) {
+        rows.push(lines[i].split('|'));
+        i++;
+      }
+      i++; // [/TABLE] 건너뜀
+
+      if (rows.length) {
+        const bdr = '1px solid #ccc';
+        const tdStyle = 'border:'+bdr+';padding:4px 7px;font-size:inherit;';
+        html += '<table style="border-collapse:collapse;width:100%;margin:6px 0;font-size:inherit;">';
+        rows.forEach((cells, ri) => {
+          html += '<tr>';
+          cells.forEach(cell => {
+            // {{변수}} 하이라이트
+            const cellHtml = escapeHtml(cell.trim()).replace(/\{\{([^}]+)\}\}/g, (_,k)=>{
+              const isCfg = k.startsWith('cfg_')||k==='붙임연월';
+              return '<mark style="background:'+(isCfg?'var(--s3)':'var(--blue-bg)')+';color:'+(isCfg?'var(--t3)':'var(--blue-t)')+';border-radius:3px;padding:0 2px;font-weight:600;">{{'+k+'}}</mark>';
+            });
+            if (ri === 0) {
+              html += '<th style="'+tdStyle+'background:var(--s2);font-weight:600;">'+cellHtml+'</th>';
+            } else {
+              html += '<td style="'+tdStyle+'">'+cellHtml+'</td>';
+            }
+          });
+          html += '</tr>';
+        });
+        html += '</table>';
+      }
+    } else {
+      // 일반 텍스트 줄 — {{변수}} 하이라이트
+      const escaped = escapeHtml(ln)
+        .replace(/\{\{([^}]+)\}\}/g, (_, k) => {
+          const isCfg = k.startsWith('cfg_') || k === '붙임연월';
+          const col = isCfg ? 'var(--t3)' : 'var(--blue-t)';
+          const bg  = isCfg ? 'var(--s3)' : 'var(--blue-bg)';
+          return '<mark style="background:'+bg+';color:'+col+';border-radius:3px;padding:0 2px;font-weight:600;">{{'+k+'}}</mark>';
+        });
+      html += '<div>' + (escaped.trim() ? escaped : '&nbsp;') + '</div>';
+      i++;
+    }
+  }
   disp.innerHTML = html;
 }
 
-// display 편집 → textarea 동기화
+function escapeHtml(str) {
+  return String(str)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// display 편집 → textarea 동기화 (표는 [TABLE] 문법으로 역변환)
 function syncBodyFromDisplay() {
   const ta = document.getElementById('m_body');
   const disp = document.getElementById('s3BodyDisplay');
   if (!ta || !disp) return;
-  // mark 태그를 {{키}} 텍스트로 복원
-  let html = disp.innerHTML;
-  html = html.replace(/<mark[^>]*>\{\{([^}]+)\}\}<\/mark>/g, '{{$1}}');
-  // 나머지 HTML → 텍스트 변환
-  const tmp = document.createElement('div');
-  tmp.innerHTML = html;
-  ta.value = tmp.innerText || tmp.textContent || '';
+
+  let result = '';
+  // 자식 노드 순회
+  disp.childNodes.forEach(node => {
+    if (node.nodeType === Node.TEXT_NODE) {
+      result += node.textContent;
+    } else if (node.nodeName === 'TABLE') {
+      // 표 → [TABLE:표N] 문법 복원
+      const rows = [];
+      node.querySelectorAll('tr').forEach(tr => {
+        const cells = [];
+        tr.querySelectorAll('th,td').forEach(td => {
+          // mark 태그 내 {{변수}} 복원
+          let cellText = '';
+          td.childNodes.forEach(cn => {
+            if (cn.nodeType === Node.TEXT_NODE) cellText += cn.textContent;
+            else if (cn.nodeName === 'MARK') cellText += cn.textContent;
+            else cellText += cn.textContent;
+          });
+          cells.push(cellText.trim());
+        });
+        rows.push(cells.join('|'));
+      });
+      // 표 이름은 기존 헤더에서 추론하거나 표N으로
+      result += '[TABLE:표]\n' + rows.join('\n') + '\n[/TABLE]\n';
+    } else if (node.nodeName === 'DIV' || node.nodeName === 'P') {
+      // mark 태그 복원하면서 텍스트 추출
+      let lineText = '';
+      node.childNodes.forEach(cn => {
+        if (cn.nodeType === Node.TEXT_NODE) lineText += cn.textContent;
+        else if (cn.nodeName === 'MARK') lineText += cn.textContent;
+        else lineText += cn.textContent;
+      });
+      result += lineText + '\n';
+    } else {
+      result += node.textContent;
+    }
+  });
+
+  ta.value = result.replace(/\n{3,}/g, '\n\n').trim();
 }
 
 // 변수 삭제 시 본문의 {{키}} 제거
