@@ -530,6 +530,13 @@ textarea { resize: vertical; min-height: 64px; line-height: 1.65; }
 .autofill-result-val { color: var(--green-t); font-weight: 600; }
 .autofill-result-skip { color: var(--t3); font-style: italic; }
 
+/* 미리보기/통계 모달 오버레이 */
+#tplPreviewModal, #statModal {
+  position: fixed; inset: 0; z-index: 400;
+  background: rgba(0,0,0,.45);
+  display: flex; align-items: center; justify-content: center;
+}
+
 /* 가이드 탭 textarea */
 .guide-textarea {
   width: 100%; min-height: 320px; font-size: 12px;
@@ -680,6 +687,8 @@ textarea { resize: vertical; min-height: 64px; line-height: 1.65; }
         <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
       </svg>새 템플릿
     </button>
+    <button class="btn sm" onclick="openStatModal()" title="통계 대시보드"
+      style="font-size:11px;">📊</button>
     <button class="btn-icon" onclick="openSettings()" title="설정">
       <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8">
         <circle cx="12" cy="12" r="3"/>
@@ -925,6 +934,16 @@ textarea { resize: vertical; min-height: 64px; line-height: 1.65; }
             <polyline points="17 21 17 13 7 13 7 21"/>
           </svg>이력 저장
         </button>
+        <button class="btn sm" id="autoSaveToggle" onclick="toggleAutoSave()"
+          title="복사 시 자동으로 이력 저장"
+          style="font-size:10px;color:var(--green-t);">자동저장 ON</button>
+        <button class="btn sm" onclick="curTpl()&&copyTpl(S.curTplId)"
+          title="현재 템플릿 복사">
+          <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" style="width:12px;height:12px;">
+            <rect x="9" y="9" width="13" height="13" rx="2"/>
+            <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/>
+          </svg>템플릿 복사
+        </button>
         <span class="toast" id="cpToast"></span>
       </div>
     </div>
@@ -957,15 +976,20 @@ textarea { resize: vertical; min-height: 64px; line-height: 1.65; }
           onclick="document.getElementById('mhtInput').click()"
           ondragover="event.preventDefault();this.classList.add('drag')"
           ondragleave="this.classList.remove('drag')"
-          ondrop="event.preventDefault();this.classList.remove('drag');handleMHT(event.dataTransfer.files[0])">
+          ondrop="event.preventDefault();this.classList.remove('drag');handleMHTMulti(event.dataTransfer.files)">
           <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
             <path d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z"/>
           </svg>
           <div class="uz-t">MHT 파일 드래그 또는 클릭</div>
-          <div class="uz-s">기존 결재문서를 업로드하면 AI가 자동 분석합니다</div>
-          <input type="file" id="mhtInput" accept=".mht,.mhtml" style="display:none"
-            onchange="handleMHT(this.files[0])">
+          <div class="uz-s">
+            단일 파일: 분석 후 템플릿 1개 생성<br>
+            <b>2~10개 동시 업로드:</b> 같은 양식이면 통합 분석, 다른 양식이면 각각 생성
+          </div>
+          <input type="file" id="mhtInput" accept=".mht,.mhtml" multiple style="display:none"
+            onchange="handleMHTMulti(this.files)">
         </div>
+        <!-- 다중 파일 목록 표시 -->
+        <div id="multiFileList" style="display:none;margin-top:10px;"></div>
       </div>
 
       <!-- 방식 B: 텍스트 붙여넣기 -->
@@ -1026,6 +1050,17 @@ textarea { resize: vertical; min-height: 64px; line-height: 1.65; }
           <input type="text" id="m_deadline" placeholder="예: 매월 21일">
         </div>
         <div class="fg">
+          <div class="flabel">문서 유형 태그</div>
+          <select id="m_docType" style="font-size:13px;">
+            <option value="">-- 선택 안함 --</option>
+            <option value="청구서">청구서</option>
+            <option value="보고서">보고서</option>
+            <option value="계획서">계획서</option>
+            <option value="협조전">협조전</option>
+            <option value="기타">기타</option>
+          </select>
+        </div>
+        <div class="fg">
           <div class="flabel">제목 템플릿</div>
           <input type="text" id="m_titleTpl" placeholder="예: 케이뱅크 위탁수수료 청구({{청구연월}})" oninput="detectBodyVars()">
         </div>
@@ -1073,6 +1108,36 @@ textarea { resize: vertical; min-height: 64px; line-height: 1.65; }
         <button class="btn solid" onclick="saveTpl()">저장</button>
       </div>
     </div>
+  </div>
+</div>
+
+<!-- ══ 템플릿 미리보기 모달 ══ -->
+<div class="modal-overlay" id="tplPreviewModal" style="display:none;" onclick="closeTplPreview()">
+  <div class="modal" style="max-width:700px;width:95%;max-height:88vh;overflow-y:auto;"
+    onclick="event.stopPropagation()">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+      <div>
+        <div style="font-size:14px;font-weight:700;" id="tplPreviewTitle">템플릿 미리보기</div>
+        <div style="font-size:11px;color:var(--t3);margin-top:2px;">샘플 값으로 렌더링한 미리보기입니다</div>
+      </div>
+      <div style="display:flex;gap:8px;">
+        <button class="btn blue sm" onclick="editFromPreview()">✏️ 수정</button>
+        <button class="btn sm" onclick="closeTplPreview()">✕ 닫기</button>
+      </div>
+    </div>
+    <div id="tplPreviewBody" style="background:var(--s2);border-radius:var(--r);padding:20px 24px;"></div>
+  </div>
+</div>
+
+<!-- ══ 통계 대시보드 모달 ══ -->
+<div class="modal-overlay" id="statModal" style="display:none;" onclick="closeStatModal()">
+  <div class="modal" style="max-width:800px;width:95%;max-height:90vh;overflow-y:auto;"
+    onclick="event.stopPropagation()">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+      <div style="font-size:14px;font-weight:700;">📊 문서 통계 대시보드</div>
+      <button class="btn sm" onclick="closeStatModal()">✕</button>
+    </div>
+    <div id="statContent"></div>
   </div>
 </div>
 
@@ -1326,7 +1391,9 @@ let S = {
   activeCenter: 'all',
   curTplId: null,
   curVals: {},
-  editMode: false   // 수정 모드 여부
+  editMode: false,
+  favorites: [],        // 즐겨찾기 템플릿 ID 목록
+  autoSaveHist: true    // 복사 시 자동 이력 저장
 };
 
 // ── 저장/불러오기 ──
@@ -1407,7 +1474,8 @@ async function saveTplToSupabase(tpl) {
   const row = {
     name:tpl.name, center_id:tpl.centerId, deadline:tpl.deadline,
     deadline_day:tpl.deadlineDay||0, title_template:tpl.titleTemplate,
-    body_template:tpl.bodyTemplate, fields_schema:tpl.fields
+    body_template:tpl.bodyTemplate, fields_schema:tpl.fields,
+    doc_type: tpl.docType || ''
   };
   if (tpl.id && !tpl.id.startsWith('t')) {
     // uuid → PATCH
@@ -1492,14 +1560,22 @@ function renderTplList(filter = '') {
     const fok = !filter || t.name.includes(filter) || cn(t.centerId).includes(filter);
     return cok && fok;
   });
+  // 즐겨찾기 상단 고정 정렬
+  list.sort((a, b) => {
+    const aFav = (S.favorites || []).includes(a.id) ? 0 : 1;
+    const bFav = (S.favorites || []).includes(b.id) ? 0 : 1;
+    return aFav - bFav;
+  });
   document.getElementById('tplCount').textContent = `${list.length}개`;
   if (!list.length) {
     document.getElementById('tplList').innerHTML =
       '<div class="empty-msg">해당 센터의 템플릿이 없습니다</div>';
+    document.getElementById('tplCount').textContent = '0개';
     return;
   }
   const today = new Date().getDate();
-  document.getElementById('tplList').innerHTML = list.map(t => {
+  // 렌더 함수
+  const renderTplItem = t => {
     const isOn = t.id === S.curTplId;
     // D-day 계산
     let ddayHtml = '';
@@ -1510,6 +1586,8 @@ function renderTplList(filter = '') {
         ddayHtml = `<span class="tpl-dday ${cls}">D-${diff === 0 ? '0' : diff}</span>`;
       }
     }
+    // 즐겨찾기 여부
+    const isFav = (S.favorites || []).includes(t.id);
     // 센터 이동 드롭다운
     const isDefault = !S.centers.find(c => c.id === t.centerId);
     const moveOpts = [
@@ -1518,11 +1596,18 @@ function renderTplList(filter = '') {
         `<option value="${c.id}" ${c.id===t.centerId?'selected':''}>${c.name}</option>`)
     ].join('');
     return `<div class="tpl-item ${isOn ? 'on' : ''}" onclick="loadTpl('${t.id}')">
-      <div class="tpl-item-left" style="min-width:0;flex:1;">
+        <div onclick="toggleFav('${t.id}');event.stopPropagation()" title="${isFav?'즐겨찾기 해제':'추가'}"
+          style="cursor:pointer;font-size:13px;flex-shrink:0;color:${isFav?'#F5A623':'var(--t3)'}">
+          ${isFav?'★':'☆'}
+        </div>
         <div class="tpl-dot" style="background:${cc(t.centerId)}"></div>
         <div class="tpl-info">
-          <div class="tpl-name">${t.name}</div>
-          <div class="tpl-meta">${cn(t.centerId)}${t.deadline ? ' · ' + t.deadline : ''}</div>
+          <div class="tpl-name">${t.name}${t.docType ? ' <span style="font-size:9px;padding:1px 5px;border-radius:10px;background:var(--s3);color:var(--t2);font-weight:400;">'+t.docType+'</span>' : ''}</div>
+          <div class="tpl-meta">${cn(t.centerId)}${t.deadline ? ' · ' + t.deadline : ''}
+            <span onclick="openTplPreview('${t.id}',event)"
+              style="margin-left:5px;cursor:pointer;color:var(--blue-t);font-weight:600;"
+              title="미리보기">👁</span>
+          </div>
         </div>
       </div>
       <div style="display:flex;align-items:center;gap:4px;flex-shrink:0;">
@@ -1545,7 +1630,24 @@ function renderTplList(filter = '') {
           onmouseout="this.style.background='var(--surface)';this.style.color='var(--t3)'">✕</button>
       </div>
     </div>`;
-  }).join('');
+  };
+  // docType 그룹핑
+  const _grouped = {}, _ungrouped = [];
+  list.forEach(t => { if (t.docType) { (_grouped[t.docType]||(_grouped[t.docType]=[])).push(t); } else _ungrouped.push(t); });
+  let tplHtml = '';
+  if (Object.keys(_grouped).length) {
+    Object.entries(_grouped).forEach(([type, items]) => {
+      tplHtml += '<div style="font-size:10px;font-weight:700;color:var(--t3);padding:8px 10px 3px;letter-spacing:.5px;">▸ ' + type + '</div>';
+      tplHtml += items.map(renderTplItem).join('');
+    });
+    if (_ungrouped.length) {
+      tplHtml += '<div style="font-size:10px;font-weight:700;color:var(--t3);padding:8px 10px 3px;letter-spacing:.5px;">▸ 미분류</div>';
+      tplHtml += _ungrouped.map(renderTplItem).join('');
+    }
+  } else {
+    tplHtml = list.map(renderTplItem).join('');
+  }
+  document.getElementById('tplList').innerHTML = list.length ? tplHtml : '<div class="empty-msg">등록된 문서가 없습니다</div>';
 }
 
 // ══ 이력 목록 (좌측 패널) ══
@@ -1752,7 +1854,7 @@ function onFInput(key, val) {
     const v = calcF(f);
     el.value = isAmt(f.key) ? fmt(v) : String(v);
   });
-  checkWarn();
+  checkWarnAdvanced();
   updatePreview();
 }
 
@@ -2067,11 +2169,16 @@ function cpBody() {
       'text/plain': new Blob([txt],  { type: 'text/plain' })
     })
   ])
-  .then(() => showToast('본문 복사됨 (표 포함)'))
+  .then(() => {
+    showToast('본문 복사됨 (표 포함)');
+    if (S.autoSaveHist !== false) saveHist(); // 자동 이력 저장
+  })
   .catch(() => {
-    // fallback: 텍스트만 복사
     navigator.clipboard.writeText(txt)
-      .then(() => showToast('본문 복사됨 (텍스트)'))
+      .then(() => {
+        showToast('본문 복사됨 (텍스트)');
+        if (S.autoSaveHist !== false) saveHist();
+      })
       .catch(() => gToast('복사 실패 — 브라우저 설정을 확인하세요'));
   });
 }
@@ -2262,7 +2369,7 @@ ${fieldCtx}
       })
     });
     const data   = await resp.json();
-    const rawTxt = (data.content?.[0]?.text || '').replace(/```json\n?|```\n?/g, '').trim();
+    const rawTxt = (data.content?.[0]?.text || '').replace(/```json[\s\S]*?```|```/g, '').trim();
     const parsed = JSON.parse(rawTxt);
 
     // 결과 적용
@@ -2424,6 +2531,257 @@ function restoreFromFile(file) {
   document.getElementById('restoreFile').value = '';
 }
 
+// ══ 즐겨찾기 토글 ══
+function toggleFav(id) {
+  if (!S.favorites) S.favorites = [];
+  const idx = S.favorites.indexOf(id);
+  if (idx >= 0) S.favorites.splice(idx, 1);
+  else           S.favorites.unshift(id);
+  persist(); renderTplList();
+}
+
+// ══ 템플릿 복사 ══
+function copyTpl(id) {
+  const t = S.templates.find(x => x.id === id);
+  if (!t) return;
+  const newTpl = {
+    ...JSON.parse(JSON.stringify(t)), // 깊은 복사
+    id: 't' + Date.now(),
+    name: t.name + ' (복사)',
+    createdAt: new Date().toISOString().slice(0, 10)
+  };
+  S.templates.push(newTpl);
+  persist(); renderTplList();
+  // 복사된 템플릿을 수정 모드로 바로 열기
+  S.curTplId = newTpl.id;
+  editCurrentTpl();
+  gToast(`"${newTpl.name}" 복사됨 — 이름을 수정하세요`);
+}
+
+// ══ 자동 이력 저장 토글 ══
+function toggleAutoSave() {
+  S.autoSaveHist = !S.autoSaveHist;
+  persist();
+  const btn = document.getElementById('autoSaveToggle');
+  if (btn) btn.textContent = S.autoSaveHist ? '자동저장 ON' : '자동저장 OFF';
+  gToast(`복사 시 자동 이력 저장: ${S.autoSaveHist ? 'ON' : 'OFF'}`);
+}
+
+// ══ 3개월 평균 ±10% 경고 (기존 30% 경고와 병행) ══
+function checkWarnAdvanced() {
+  const tpl = curTpl(); if (!tpl) return;
+  const warns = [];
+
+  tpl.fields.forEach(f => {
+    if (f.type !== 'amount') return;
+    const cur = parseFloat(String(S.curVals[f.key] || '0').replace(/,/g, ''));
+    if (!cur) return;
+
+    // 최근 3개월 이력에서 같은 필드 값 수집
+    const recent = S.history
+      .filter(h => h.templateId === tpl.id)
+      .slice(0, 3)
+      .map(h => parseFloat(String(h.values?.[f.key] || '0').replace(/,/g, '')))
+      .filter(v => v > 0);
+
+    if (recent.length >= 2) {
+      const avg = recent.reduce((a, b) => a + b, 0) / recent.length;
+      const ratio = Math.abs((cur - avg) / avg * 100);
+      if (ratio > 10) {
+        warns.push(`${f.label}: 최근 ${recent.length}개월 평균 대비 ${ratio.toFixed(0)}% 이탈 (평균: ${fmt(Math.round(avg))}원)`);
+      }
+    }
+
+    // 기존 전월 대비 30% 경고도 유지
+    if (f.key.startsWith('당월')) {
+      const prevKey = f.key.replace('당월', '전월');
+      const pv = parseFloat(String(S.curVals[prevKey] || '0').replace(/,/g, ''));
+      if (pv > 0 && cur > 0) {
+        const ratio = Math.abs((cur - pv) / pv * 100);
+        if (ratio > 30) warns.push(`${f.label}: 전월 대비 ${ratio.toFixed(0)}% 변동 — 확인 필요`);
+      }
+    }
+  });
+
+  // 오타/띄어쓰기 검사 (텍스트 필드)
+  tpl.fields.forEach(f => {
+    if (f.type !== 'text') return;
+    const val = S.curVals[f.key] || '';
+    if (!val) return;
+    // 연속 공백 감지
+    if (/  +/.test(val)) warns.push(`${f.label}: 연속 공백이 있습니다`);
+    // 숫자 필드인데 문자 혼입
+    if (/인원|명수/.test(f.label) && !/^\d+명?$/.test(val.trim()))
+      warns.push(`${f.label}: 숫자+명 형식으로 입력하세요 (예: 62명)`);
+  });
+
+  const banner = document.getElementById('warnBanner');
+  banner.style.display = warns.length ? 'flex' : 'none';
+  if (warns.length) document.getElementById('warnText').innerHTML = warns.join('<br>');
+}
+
+// ══ 템플릿 미리보기 ══
+let previewTplId = null;
+
+function openTplPreview(id, event) {
+  if (event) event.stopPropagation();
+  const tpl = S.templates.find(t => t.id === id);
+  if (!tpl) return;
+  previewTplId = id;
+  document.getElementById('tplPreviewTitle').textContent = tpl.name + ' — 미리보기';
+
+  // 샘플값 생성 (placeholder 또는 타입 기반)
+  const sampleVals = {};
+  tpl.fields.forEach(f => {
+    if (f.type === 'calc') return;
+    if (f.type === 'amount') sampleVals[f.key] = '10000000';
+    else if (/연월|기간/.test(f.key)) sampleVals[f.key] = '26년6월';
+    else if (/인원|명/.test(f.key)) sampleVals[f.key] = '62명';
+    else sampleVals[f.key] = f.placeholder || `(${f.label})`;
+  });
+
+  // 센터 기본값 주입
+  const cd = S.centers.find(c => c.id === tpl.centerId)?.defaults || {};
+  const cfg = S.cfg;
+  sampleVals.cfg_bank      = cd.bank      || cfg.bank      || '(은행명)';
+  sampleVals.cfg_account   = cd.account   || cfg.account   || '(계좌번호)';
+  sampleVals.cfg_depositor = cd.depositor || cfg.depositor || '(예금주)';
+  sampleVals.cfg_contact   = cd.contact   || cfg.contact   || '(담당자)';
+  sampleVals['붙임연월']   = '2026.6';
+
+  // calc 필드 계산
+  const savedVals = S.curVals;
+  const savedId   = S.curTplId;
+  S.curTplId = id;
+  S.curVals  = sampleVals;
+  const allCalc = calcAllFields();
+  tpl.fields.filter(f => f.type === 'calc').forEach(f => {
+    sampleVals[f.key] = allCalc[f.key] ?? '';
+  });
+  S.curVals  = savedVals;
+  S.curTplId = savedId;
+
+  // 렌더링
+  const title = renderTmpl(tpl.titleTemplate || tpl.name, sampleVals);
+  const body  = parseBody(tpl.bodyTemplate || '', sampleVals, false, '', cfg);
+  const html  = `<div style="font-family:${cfg.font};font-size:${cfg.fsize};line-height:${cfg.lh};">
+    <p style="font-size:14px;font-weight:700;margin-bottom:14px;padding-bottom:10px;
+      border-bottom:1px solid var(--border);">제 목 : ${title}</p>
+    <div>${body}</div>
+  </div>`;
+
+  document.getElementById('tplPreviewBody').innerHTML = html;
+  document.getElementById('tplPreviewModal').style.display = 'flex';
+}
+
+function closeTplPreview() {
+  document.getElementById('tplPreviewModal').style.display = 'none';
+  previewTplId = null;
+}
+
+function editFromPreview() {
+  closeTplPreview();
+  if (previewTplId) {
+    S.curTplId = previewTplId;
+    editCurrentTpl();
+  }
+}
+
+// ══ 문서 통계 대시보드 ══
+function openStatModal() {
+  renderStatContent();
+  document.getElementById('statModal').style.display = 'flex';
+}
+function closeStatModal() {
+  document.getElementById('statModal').style.display = 'none';
+}
+
+function renderStatContent() {
+  const el = document.getElementById('statContent');
+  if (!el) return;
+
+  if (!S.history.length) {
+    el.innerHTML = '<div style="text-align:center;color:var(--t3);padding:40px;">저장된 이력이 없습니다.</div>';
+    return;
+  }
+
+  // 센터별 + 월별 금액 집계
+  const byCenter = {};
+  S.history.forEach(h => {
+    const tpl = S.templates.find(t => t.id === h.templateId);
+    const cid  = h.centerId || '기타';
+    const name = cn(cid);
+    if (!byCenter[name]) byCenter[name] = { total:0, count:0, months:{} };
+    // 공급가액 키 찾기
+    const amtKey = Object.keys(h.values || {}).find(k => /당월공급가액|공급가액/.test(k));
+    const amt    = amtKey ? parseFloat(String(h.values[amtKey]).replace(/,/g,'')) || 0 : 0;
+    byCenter[name].total += amt;
+    byCenter[name].count += 1;
+    // 월별
+    const dt = new Date(h.ts);
+    const ym = `${dt.getFullYear()}.${dt.getMonth()+1}`;
+    byCenter[name].months[ym] = (byCenter[name].months[ym] || 0) + amt;
+  });
+
+  // 전체 통계 카드
+  const totalDocs = S.history.length;
+  const totalAmt  = Object.values(byCenter).reduce((s,v) => s+v.total, 0);
+  const totalTpls = S.templates.length;
+
+  let html = `
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px;">
+      <div style="background:var(--blue-bg);border-radius:var(--r);padding:16px;text-align:center;">
+        <div style="font-size:22px;font-weight:700;color:var(--blue-t);">${totalDocs}</div>
+        <div style="font-size:12px;color:var(--t2);margin-top:4px;">총 생성 문서</div>
+      </div>
+      <div style="background:var(--green-bg);border-radius:var(--r);padding:16px;text-align:center;">
+        <div style="font-size:22px;font-weight:700;color:var(--green-t);">${totalTpls}</div>
+        <div style="font-size:12px;color:var(--t2);margin-top:4px;">등록 템플릿</div>
+      </div>
+      <div style="background:var(--s2);border-radius:var(--r);padding:16px;text-align:center;">
+        <div style="font-size:18px;font-weight:700;color:var(--text);">${totalAmt ? fmt(Math.round(totalAmt/100000000*10)/10)+'억' : '-'}</div>
+        <div style="font-size:12px;color:var(--t2);margin-top:4px;">총 청구금액(추정)</div>
+      </div>
+    </div>`;
+
+  // 센터별 목록
+  html += '<div style="font-size:12px;font-weight:700;margin-bottom:10px;">센터별 현황</div>';
+  html += '<div style="display:flex;flex-direction:column;gap:8px;">';
+  const maxAmt = Math.max(...Object.values(byCenter).map(v => v.total), 1);
+  Object.entries(byCenter).sort((a,b) => b[1].total-a[1].total).forEach(([name, v]) => {
+    const pct = Math.round(v.total / maxAmt * 100);
+    const color = S.centers.find(c => cn(c.id) === name)?.color || '#888';
+    html += `<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--r-sm);padding:12px 14px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+        <div style="display:flex;align-items:center;gap:7px;">
+          <div style="width:8px;height:8px;border-radius:50%;background:${color};"></div>
+          <span style="font-size:12px;font-weight:600;">${name}</span>
+        </div>
+        <div style="font-size:11px;color:var(--t2);">${v.count}건${v.total ? ' · ' + fmt(Math.round(v.total/10000))+'만원' : ''}</div>
+      </div>
+      <div style="background:var(--s2);border-radius:3px;height:6px;overflow:hidden;">
+        <div style="background:${color};height:100%;width:${pct}%;border-radius:3px;transition:width .3s;"></div>
+      </div>
+    </div>`;
+  });
+  html += '</div>';
+
+  // 최근 활동 (최근 5건)
+  html += '<div style="font-size:12px;font-weight:700;margin:16px 0 10px;">최근 활동</div>';
+  html += '<div style="display:flex;flex-direction:column;gap:6px;">';
+  S.history.slice(0,5).forEach(h => {
+    const dt = new Date(h.ts).toLocaleDateString('ko-KR',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
+    html += `<div style="display:flex;justify-content:space-between;font-size:11px;
+      padding:7px 10px;background:var(--s2);border-radius:var(--r-sm);">
+      <span style="color:var(--text);font-weight:500;">${h.title}</span>
+      <span style="color:var(--t3);">${dt}</span>
+    </div>`;
+  });
+  html += '</div>';
+
+  el.innerHTML = html;
+}
+
 // ══ 전역 토스트 ══
 function gToast(msg) {
   const el = document.getElementById('gToast');
@@ -2442,6 +2800,8 @@ function editCurrentTpl() {
   document.getElementById('m_name').value     = tpl.name;
   document.getElementById('m_titleTpl').value = tpl.titleTemplate;
   document.getElementById('m_deadline').value = tpl.deadline || '';
+  const _dtEl = document.getElementById('m_docType');
+  if (_dtEl) _dtEl.value = tpl.docType || '';
   document.getElementById('m_body').value     = tpl.bodyTemplate;
   const sel = document.getElementById('m_center');
   sel.innerHTML = S.centers.map(c =>
@@ -2473,6 +2833,8 @@ function openTplModal() {
   // 변수 감지 패널 초기화
   const vp = document.getElementById('bodyVarPanel');
   if (vp) vp.style.display = 'none';
+  const dtEl = document.getElementById('m_docType');
+  if (dtEl) dtEl.value = '';
   document.getElementById('tplModal').classList.add('open');
 }
 function closeTplModal() { document.getElementById('tplModal').classList.remove('open'); }
@@ -2536,7 +2898,18 @@ ${clean}
 - 날짜·청구연월·청구기간·세금계산서일 등 → autoFill:false
 - 인원·전월금액 등 잘 안바뀌는 값 → autoFill:true
 - 부가세=공급가액*0.1, 차액=당월-전월 등은 type:calc
-- 고정 텍스트는 본문에 그대로 유지`;
+- 고정 텍스트는 본문에 그대로 유지
+- 담당자(담당, 연락처, 팀장, PM 등), 수신처, 은행명, 계좌번호, 예금주 정보가 있으면 반드시 contactInfo 필드에 추출
+
+추가 응답 필드:
+{
+  "contactInfo": {
+    "contact": "담당자명/연락처 (예: 홍길동 팀장 / 010-1234-5678)",
+    "bank": "은행명",
+    "account": "계좌번호",
+    "depositor": "예금주"
+  }
+}`;
 
   try {
     const resp = await fetch('/api/claude', {
@@ -2545,18 +2918,244 @@ ${clean}
         messages: [{ role: 'user', content: prompt }] })
     });
     const data = await resp.json();
-    const txt = (data.content?.[0]?.text || '').replace(/```json\n?|```\n?/g, '').trim();
+    const txt = (data.content?.[0]?.text || '').replace(/```json[\s\S]*?```|```/g, '').trim();
     const parsed = JSON.parse(txt);
     document.getElementById('m_name').value     = parsed.docName || '';
     document.getElementById('m_titleTpl').value = parsed.titleTemplate || '';
     document.getElementById('m_body').value     = parsed.bodyTemplate || '';
     mFields = parsed.fields || [];
+
+    // 담당자 정보 추출 → 확인 UI 표시
+    if (parsed.contactInfo) {
+      showContactInfoReview(parsed.contactInfo);
+    }
   } catch {
     document.getElementById('m_name').value = '새 문서';
     mFields = [{ key:'청구연월', label:'청구 연월', type:'text', placeholder:'예: 26년6월', formula:'', autoFill:false }];
   }
   renderMFields();
   showStep3();
+}
+
+// 담당자 정보 확인 UI (Step3 상단에 표시)
+function showContactInfoReview(info) {
+  // Step3가 렌더된 후 삽입
+  setTimeout(() => {
+    const existing = document.getElementById('contactInfoReview');
+    if (existing) existing.remove();
+
+    const el = document.createElement('div');
+    el.id = 'contactInfoReview';
+    el.style.cssText = 'background:var(--blue-bg);border:1px solid rgba(24,96,196,.2);'
+      + 'border-radius:var(--r);padding:14px 16px;margin-bottom:14px;';
+    el.innerHTML = '<div style="font-size:12px;font-weight:700;color:var(--blue-t);margin-bottom:10px;">'
+      + '📋 문서에서 감지된 담당자/계좌 정보 — 확인 후 저장하세요</div>'
+      + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">'
+      + makeContactRow('담당자', 'ci_contact',   info.contact   || '')
+      + makeContactRow('은행명', 'ci_bank',      info.bank      || '')
+      + makeContactRow('계좌번호','ci_account',  info.account   || '')
+      + makeContactRow('예금주', 'ci_depositor', info.depositor || '')
+      + '</div>'
+      + '<div style="display:flex;gap:8px;margin-top:10px;justify-content:flex-end;">'
+      + '<button class="btn sm" onclick="dismissContactInfo()">무시</button>'
+      + '<button class="btn blue sm" onclick="applyContactInfo()">이 센터 기본값으로 저장</button>'
+      + '<button class="btn solid sm" onclick="applyContactInfoGlobal()">공통값으로 저장</button>'
+      + '</div>';
+
+    const step3 = document.getElementById('mStep3');
+    if (step3) step3.prepend(el);
+  }, 100);
+}
+
+function dismissContactInfo() {
+  document.getElementById('contactInfoReview')?.remove();
+}
+
+function makeContactRow(label, id, val) {
+  return '<div><div class="flabel" style="margin-bottom:3px;">' + label + '</div>'
+    + '<input type="text" id="' + id + '" value="' + escQ(val) + '" style="font-size:12px;"></div>';
+}
+
+function applyContactInfo() {
+  // 현재 선택된 센터에 기본값 적용
+  const centerId = document.getElementById('m_center')?.value;
+  const c = S.centers.find(x => x.id === centerId);
+  if (!c) { applyContactInfoGlobal(); return; }
+  if (!c.defaults) c.defaults = {};
+  const contact   = document.getElementById('ci_contact')?.value.trim();
+  const bank      = document.getElementById('ci_bank')?.value.trim();
+  const account   = document.getElementById('ci_account')?.value.trim();
+  const depositor = document.getElementById('ci_depositor')?.value.trim();
+  if (contact)   c.defaults.contact   = contact;
+  if (bank)      c.defaults.bank      = bank;
+  if (account)   c.defaults.account   = account;
+  if (depositor) c.defaults.depositor = depositor;
+  persist();
+  document.getElementById('contactInfoReview')?.remove();
+  gToast(`"${c.name}" 센터 기본값에 담당자/계좌 저장됨`);
+}
+
+function applyContactInfoGlobal() {
+  const contact   = document.getElementById('ci_contact')?.value.trim();
+  const bank      = document.getElementById('ci_bank')?.value.trim();
+  const account   = document.getElementById('ci_account')?.value.trim();
+  const depositor = document.getElementById('ci_depositor')?.value.trim();
+  if (contact)   S.cfg.contact   = contact;
+  if (bank)      S.cfg.bank      = bank;
+  if (account)   S.cfg.account   = account;
+  if (depositor) S.cfg.depositor = depositor;
+  persist();
+  document.getElementById('contactInfoReview')?.remove();
+  gToast('공통 기본값에 담당자/계좌 저장됨');
+}
+
+// 다중 MHT 파일 처리
+async function handleMHTMulti(files) {
+  if (!files || files.length === 0) return;
+  if (files.length === 1) { handleMHT(files[0]); return; }
+
+  const fileArr = Array.from(files).slice(0, 10); // 최대 10개
+  document.getElementById('mStep1').style.display = 'none';
+  document.getElementById('mStep2').style.display = 'block';
+
+  // 파일 목록 표시
+  const listEl = document.getElementById('multiFileList');
+  if (listEl) {
+    listEl.style.display = 'block';
+    listEl.innerHTML = fileArr.map(f =>
+      `<div style="font-size:11px;color:var(--t2);padding:2px 0;">📄 ${f.name}</div>`
+    ).join('');
+  }
+
+  try {
+    // 모든 파일 병렬로 서버에 파싱 요청
+    const parseResults = await Promise.all(fileArr.map(async file => {
+      const raw = await file.text();
+      const resp = await fetch('/api/claude', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'parse_mht', content: raw })
+      });
+      const data = await resp.json();
+      return { name: file.name, clean: data.clean || '' };
+    }));
+
+    const validResults = parseResults.filter(r => r.clean.length > 50);
+    if (!validResults.length) throw new Error('파싱 결과 없음');
+
+    if (fileArr.length <= 3) {
+      // 2~3개: 같은 양식으로 간주 → 통합 분석으로 1개 템플릿 생성
+      await analyzeMultiSameType(validResults);
+    } else {
+      // 4개 이상: 다른 양식일 수 있으므로 각각 분석 → 선택 화면
+      await analyzeMultiDiffType(validResults);
+    }
+  } catch(e) {
+    console.warn('다중 파일 분석 실패:', e);
+    // 첫 파일만 단일 분석으로 fallback
+    handleMHT(fileArr[0]);
+  }
+}
+
+// 같은 양식 2~3개 → 공통 패턴 추출하여 1개 템플릿
+async function analyzeMultiSameType(results) {
+  const guide = S.cfg.guide || DEFAULT_GUIDE;
+  const combined = results.map(function(r, i) {
+    return '=== 파일 ' + (i+1) + ': ' + r.name + ' ===\n' + r.clean.slice(0, 1500);
+  }).join('\n\n');
+
+  const prompt = guide + '\n\n'
+    + '다음은 동일한 양식의 결재문서 ' + results.length + '개입니다. '
+    + '여러 버전을 비교 분석하여 공통 템플릿을 만들어 주세요. '
+    + '매월 바뀌는 값(날짜, 금액, 인원 등)을 변수로 처리하고, JSON 형식으로만 응답하세요.\n\n'
+    + combined
+    + '\n\n응답 형식:\n'
+    + '{"docName":"문서명","titleTemplate":"제목({{변수}})","fields":[{"key":"키","label":"표시명","type":"text|amount|calc","placeholder":"힌트","formula":"","autoFill":true}],"bodyTemplate":"본문"}';
+
+  const resp = await fetch('/api/claude', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 4000,
+      messages: [{ role: 'user', content: prompt }] })
+  });
+  const data   = await resp.json();
+  const rawTxt = (data.content && data.content[0] && data.content[0].text) || '';
+  const txt    = rawTxt.replace(/```json[\s\S]*?```|```/g, '').trim();
+  const parsed = JSON.parse(txt);
+  document.getElementById('m_name').value     = parsed.docName || '';
+  document.getElementById('m_titleTpl').value = parsed.titleTemplate || '';
+  document.getElementById('m_body').value     = parsed.bodyTemplate || '';
+  mFields = parsed.fields || [];
+  renderMFields(); detectBodyVars(); showStep3();
+}
+
+
+// 다른 양식 4개 이상 → 각각 분석 후 일괄 저장 선택 화면
+async function analyzeMultiDiffType(results) {
+  // 각 파일 개별 분석
+  const templates = await Promise.all(results.map(async r => {
+    await analyzeDocText(r.clean);
+    return {
+      name: document.getElementById('m_name').value || r.name.replace(/\.mh[lt]l?$/i,''),
+      titleTemplate: document.getElementById('m_titleTpl').value,
+      body: document.getElementById('m_body').value,
+      fields: [...mFields]
+    };
+  }));
+
+  // 다중 템플릿 확인 화면 표시
+  showMultiTemplateReview(templates);
+}
+
+// 다중 템플릿 검토 화면
+function showMultiTemplateReview(templates) {
+  document.getElementById('mStep2').style.display = 'none';
+  // Step3에 탭 형태로 각 템플릿 표시
+  const centerId = document.getElementById('m_center').value;
+  let savedCount = 0;
+
+  const html = `<div style="background:var(--blue-bg);border-radius:var(--r-sm);padding:10px 14px;margin-bottom:14px;font-size:12px;color:var(--blue-t);font-weight:600;">
+    ✓ ${templates.length}개 문서 분석 완료 — 각각 확인 후 일괄 저장하세요
+  </div>
+  <div style="display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap;" id="multiTplTabs">
+    ${templates.map((t,i)=>`<button class="btn ${i===0?'solid':''} sm" onclick="showMultiTab(${i})" id="mtab_${i}">${t.name||'문서'+(i+1)}</button>`).join('')}
+  </div>
+  ${templates.map((t,i)=>`<div id="mtpl_${i}" style="display:${i===0?'block':'none'};">
+    <div class="fg"><div class="flabel">문서명</div>
+      <input type="text" value="${t.name}" oninput="multiTemplates[${i}].name=this.value" style="font-size:13px;">
+    </div>
+    <div class="fg"><div class="flabel">제목 템플릿</div>
+      <input type="text" value="${t.titleTemplate}" oninput="multiTemplates[${i}].titleTemplate=this.value" style="font-size:12px;">
+    </div>
+  </div>`).join('')}
+  <div style="display:flex;gap:8px;margin-top:16px;justify-content:flex-end;">
+    <button class="btn" onclick="closeTplModal()">취소</button>
+    <button class="btn solid" onclick="saveAllMultiTemplates()">전체 저장 (${templates.length}개)</button>
+  </div>`;
+
+  window.multiTemplates = templates;
+  document.getElementById('mStep3').innerHTML = html;
+  document.getElementById('mStep3').style.display = 'block';
+}
+
+function showMultiTab(idx) {
+  document.querySelectorAll('[id^="mtpl_"]').forEach(el => el.style.display = 'none');
+  document.querySelectorAll('[id^="mtab_"]').forEach(el => el.classList.remove('solid'));
+  document.getElementById('mtpl_' + idx).style.display = 'block';
+  document.getElementById('mtab_' + idx).classList.add('solid');
+}
+
+function saveAllMultiTemplates() {
+  const centerId = document.getElementById('m_center').value;
+  (window.multiTemplates || []).forEach(t => {
+    const dd = 0;
+    S.templates.push({
+      id: 't' + Date.now() + Math.random(), name: t.name, centerId,
+      deadline: '', deadlineDay: 0, createdAt: new Date().toISOString().slice(0,10),
+      titleTemplate: t.titleTemplate || t.name + '({{청구연월}})',
+      bodyTemplate: t.body, fields: t.fields || []
+    });
+  });
+  persist(); renderTplList(); closeTplModal();
+  gToast(`${(window.multiTemplates||[]).length}개 템플릿 저장됨`);
 }
 
 async function handleMHT(file) {
@@ -2594,38 +3193,110 @@ async function handleMHT(file) {
 }
 
 // 모달 필드 목록 렌더
+function escQ(s) { return String(s || '').replace(/"/g, '&quot;'); }
 function renderMFields() {
   document.getElementById('m_fieldList').innerHTML = mFields.map((f, i) => {
-    // calc 타입은 자동계산이므로 자동채움 체크박스 비활성화
     const isCalc = f.type === 'calc';
-    // autoFill 미설정 필드는 기본값 true (하위호환)
     const checked = isCalc ? false : (f.autoFill !== false);
-    const chk = isCalc
-      ? `<span style="display:flex;justify-content:center;color:var(--t3);font-size:11px;">—</span>`
-      : `<label style="display:flex;justify-content:center;align-items:center;cursor:pointer;">
-           <input type="checkbox" ${checked ? 'checked' : ''}
-             onchange="mFields[${i}].autoFill=this.checked"
-             style="width:15px;height:15px;cursor:pointer;">
-         </label>`;
-    return `<div class="field-editor-grid">
-      <input type="text" placeholder="필드 키" value="${f.key}"
-        oninput="mFields[${i}].key=this.value" style="font-size:12px;">
-      <input type="text" placeholder="표시명" value="${f.label}"
-        oninput="mFields[${i}].label=this.value" style="font-size:12px;">
-      <select onchange="mFields[${i}].type=this.value;renderMFields()" style="font-size:12px;">
-        <option value="text"   ${f.type==='text'  ?'selected':''}>텍스트</option>
-        <option value="amount" ${f.type==='amount'?'selected':''}>금액</option>
-        <option value="calc"   ${f.type==='calc'  ?'selected':''}>자동계산</option>
-      </select>
-      <input type="text"
-        placeholder="${f.type==='calc' ? '수식 예: 당월공급가액*0.1' : '입력 힌트'}"
-        value="${f.type==='calc' ? (f.formula||'') : (f.placeholder||'')}"
-        oninput="mFields[${i}].${f.type==='calc'?'formula':'placeholder'}=this.value"
-        style="font-size:12px;">
-      ${chk}
-      <button class="btn danger sm" onclick="mFields.splice(${i},1);renderMFields()">✕</button>
-    </div>`;
+    // 자동채움 체크박스 (calc 제외)
+    const chkHtml = isCalc
+      ? '<span style="display:flex;justify-content:center;color:var(--t3);font-size:11px;">—</span>'
+      : '<label style="display:flex;justify-content:center;align-items:center;cursor:pointer;">'
+        + '<input type="checkbox" ' + (checked ? 'checked' : '')
+        + ' onchange="mFields[' + i + '].autoFill=this.checked"'
+        + ' style="width:15px;height:15px;cursor:pointer;"></label>';
+
+    // 수식 빌더 (calc) 또는 힌트 입력 (일반)
+    let formulaHtml = '';
+    if (isCalc) {
+      formulaHtml = buildFormulaUI(i, f);
+    } else {
+      formulaHtml = '<input type="text" placeholder="입력 힌트"'
+         + ' value="' + escQ(f.placeholder || '') + '"'
+        + ' oninput="mFields[' + i + '].placeholder=this.value"'
+        + ' style="font-size:12px;">';
+    }
+
+    return '<div class="field-editor-grid">'
+      + '<input type="text" placeholder="필드 키"'
+         + ' value="' + escQ(f.key || '') + '"'
+        + ' oninput="mFields[' + i + '].key=this.value;renderMFields()" style="font-size:12px;">'
+      + '<input type="text" placeholder="표시명"'
+         + ' value="' + escQ(f.label || '') + '"'
+        + ' oninput="mFields[' + i + '].label=this.value" style="font-size:12px;">'
+      + '<select onchange="mFields[' + i + '].type=this.value;renderMFields()" style="font-size:12px;">'
+        + '<option value="text"'   + (f.type === 'text'   ? ' selected' : '') + '>텍스트</option>'
+        + '<option value="amount"' + (f.type === 'amount' ? ' selected' : '') + '>금액</option>'
+        + '<option value="calc"'   + (f.type === 'calc'   ? ' selected' : '') + '>자동계산</option>'
+      + '</select>'
+      + formulaHtml
+      + chkHtml
+      + '<button class="btn danger sm" onclick="mFields.splice(' + i + ',1);renderMFields()">✕</button>'
+    + '</div>';
   }).join('');
+}
+
+// 수식 빌더 UI 생성
+function buildFormulaUI(idx, f) {
+  var availKeys = mFields.filter(function(ff) {
+    return ff.type !== 'calc' && ff.key;
+  }).map(function(ff) { return ff.key; });
+
+  var fml   = f.formula || '';
+  var mat   = fml.match(/^([^+\-*/]+)([+\-*/])(.+)$/);
+  var selA  = mat ? mat[1].trim() : '';
+  var selOp = mat ? mat[2] : '*';
+  var selB  = mat ? mat[3].trim() : '0.1';
+
+  function makeOpts(sel) {
+    var h = '<option value="">-- 필드 선택 --</option>';
+    availKeys.forEach(function(k) {
+      h += '<option value="' + escQ(k) + '"' + (k === sel ? ' selected' : '') + '>' + k + '</option>';
+    });
+    [['0.1','0.1 (10%)'],['0.11','0.11 (11%)'],['1','1 (고정)']].forEach(function(e) {
+      h += '<option value="' + e[0] + '"' + (e[0] === sel ? ' selected' : '') + '>' + e[1] + '</option>';
+    });
+    return h;
+  }
+  function makeOpOpts(sel) {
+    return ['+','-','*','/'].map(function(o) {
+      return '<option value="' + o + '"' + (o === sel ? ' selected' : '') + '>' + o + '</option>';
+    }).join('');
+  }
+
+  var wrap = 'style="display:flex;gap:4px;align-items:center;flex:1;"';
+  var st   = 'style="font-size:11px;padding:4px;border:1px solid var(--border2);border-radius:var(--r-sm);';
+
+  var h = '<div ' + wrap + '>';
+  h += '<select data-fidx="' + idx + '" data-part="op_a" onchange="buildFormula(+this.dataset.fidx,this.value,this.dataset.part)" ' + st + 'flex:1;">' + makeOpts(selA) + '</select>';
+  h += '<select data-fidx="' + idx + '" data-part="op"   onchange="buildFormula(+this.dataset.fidx,this.value,this.dataset.part)" ' + st + 'width:42px;">' + makeOpOpts(selOp) + '</select>';
+  h += '<select data-fidx="' + idx + '" data-part="op_b" onchange="buildFormula(+this.dataset.fidx,this.value,this.dataset.part)" ' + st + 'flex:1;">' + makeOpts(selB) + '</select>';
+  h += '<input type="text" placeholder="직접입력" value="' + escQ(fml) + '" data-fidx="' + idx + '" oninput="mFields[+this.dataset.fidx].formula=this.value" ' + st + 'width:80px;border-style:dashed;">';
+  h += '</div>';
+  return h;
+}
+
+
+
+// 수식 빌더: 드롭다운 선택으로 formula 자동 조합
+function buildFormula(idx, val, part) {
+  const f = mFields[idx];
+  if (!f) return;
+  const fml = f.formula || '';
+  const parsed = fml.match(/^([^+\-*/]+)([+\-*/])(.+)$/) || ['','','*','0.1'];
+  let a = parsed[1]?.trim() || '';
+  let op = parsed[2] || '*';
+  let b = parsed[3]?.trim() || '0.1';
+  if (part === 'op_a') a = val;
+  if (part === 'op')   op = val;
+  if (part === 'op_b') b = val;
+  if (a && b) {
+    f.formula = `${a}${op}${b}`;
+    // 직접입력 필드도 동기화
+    const directInput = document.querySelectorAll('.field-editor-grid')[idx]
+      ?.querySelector('input[placeholder="수식 직접입력"]');
+    if (directInput) directInput.value = f.formula;
+  }
 }
 function addMField() {
   mFields.push({ key:'', label:'', type:'text', placeholder:'', formula:'', autoFill:true });
@@ -2701,6 +3372,7 @@ function saveTpl() {
   const name     = document.getElementById('m_name').value.trim();
   const centerId = document.getElementById('m_center').value;
   const deadline = document.getElementById('m_deadline').value.trim();
+  const docType  = document.getElementById('m_docType')?.value || '';
   const body     = document.getElementById('m_body').value.trim();
   const titleTpl = document.getElementById('m_titleTpl').value.trim();
   if (!name) { alert('문서명을 입력하세요.'); return; }
@@ -2721,6 +3393,7 @@ function saveTpl() {
     // 신규 등록
     S.templates.push({
       id: 't' + Date.now(), name, centerId, deadline, deadlineDay: dd,
+      docType: docType || '',
       createdAt: new Date().toISOString().slice(0, 10),
       titleTemplate: titleTpl || name + '({{청구연월}})',
       bodyTemplate: body, fields: mFields.map(f => ({ ...f }))
@@ -3165,6 +3838,11 @@ hydrate();
 renderCenterTabs();
 renderTplList();
 renderHistList();
+// 자동저장 토글 초기 상태 반영
+setTimeout(() => {
+  const aBtn = document.getElementById('autoSaveToggle');
+  if (aBtn) aBtn.textContent = S.autoSaveHist !== false ? '자동저장 ON' : '자동저장 OFF';
+}, 0);
 // Supabase에서 최신 데이터 로드 (로컬보다 최신이면 덮어씀)
 loadFromSupabase().then(() => {
   renderCenterTabs();
