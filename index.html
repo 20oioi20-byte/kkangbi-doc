@@ -1189,6 +1189,10 @@ textarea { resize: vertical; min-height: 64px; line-height: 1.65; }
       <div style="display:flex;gap:8px;margin-top:12px;justify-content:flex-end;
         border-top:1px solid var(--border);padding-top:10px;">
         <button class="btn" onclick="closeTplModal()">취소</button>
+        <button class="btn" onclick="saveWithGuide()" id="saveGuideBtn"
+          title="공통 가이드 서식(들여쓰기/항목기호/날짜/끝.)을 적용한 후 저장합니다">
+          ✨ 가이드 적용 후 저장
+        </button>
         <button class="btn solid" onclick="saveTpl()">💾 저장</button>
       </div>
     </div>
@@ -3142,159 +3146,367 @@ function applyContactInfoGlobal() {
 }
 
 // 다중 MHT 파일 처리
+// ══ 2개 MHT 업로드 → diff 자동 변수 생성 ══════════════════════
+
 async function handleMHTMulti(files) {
   if (!files || files.length === 0) return;
   if (files.length === 1) { handleMHT(files[0]); return; }
 
-  const fileArr = Array.from(files).slice(0, 10); // 최대 10개
+  const fileArr = Array.from(files).slice(0, 10);
   document.getElementById('mStep1').style.display = 'none';
   document.getElementById('mStep2').style.display = 'block';
 
-  // 파일 목록 표시
   const listEl = document.getElementById('multiFileList');
   if (listEl) {
     listEl.style.display = 'block';
     listEl.innerHTML = fileArr.map(f =>
-      `<div style="font-size:11px;color:var(--t2);padding:2px 0;">📄 ${f.name}</div>`
+      '<div style="font-size:11px;color:var(--t2);padding:2px 0;">📄 ' + f.name + '</div>'
     ).join('');
   }
 
   try {
-    // 모든 파일 병렬로 서버에 파싱 요청
+    // 모든 파일 병렬 파싱
     const parseResults = await Promise.all(fileArr.map(async file => {
       const raw = await file.text();
       const resp = await fetch('/api/claude', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ type: 'parse_mht', content: raw })
       });
+      if (!resp.ok) throw new Error('파싱 실패: ' + file.name);
       const data = await resp.json();
-      return { name: file.name, clean: data.clean || '' };
+      return { name: file.name, clean: data.clean || '', title: data.title || '', style: data.style };
     }));
 
-    const validResults = parseResults.filter(r => r.clean.length > 50);
-    if (!validResults.length) throw new Error('파싱 결과 없음');
+    const valid = parseResults.filter(r => r.clean && r.clean.length > 50);
+    if (!valid.length) throw new Error('파싱 결과 없음');
+    if (valid.length === 1) { await applyParsedResult(valid[0]); return; }
 
-    if (fileArr.length <= 3) {
-      // 2~3개: 같은 양식으로 간주 → 통합 분석으로 1개 템플릿 생성
-      await analyzeMultiSameType(validResults);
-    } else {
-      // 4개 이상: 다른 양식일 수 있으므로 각각 분석 → 선택 화면
-      await analyzeMultiDiffType(validResults);
+    // 2개: diff 방식으로 자동 변수 생성
+    if (valid.length === 2) {
+      await diffAndBuildTemplate(valid[0], valid[1]);
+      return;
     }
+
+    // 3개 이상: 최신 파일 1개를 기준으로 단일 분석
+    const newest = valid.sort((a, b) => b.name.localeCompare(a.name))[0];
+    await applyParsedResult(newest);
+
   } catch(e) {
     console.warn('다중 파일 분석 실패:', e);
-    // 첫 파일만 단일 분석으로 fallback
     handleMHT(fileArr[0]);
   }
 }
 
-// 같은 양식 2~3개 → 공통 패턴 추출하여 1개 템플릿
-async function analyzeMultiSameType(results) {
-  const guide = S.cfg.guide || DEFAULT_GUIDE;
-  const combined = results.map(function(r, i) {
-    return '=== 파일 ' + (i+1) + ': ' + r.name + ' ===\n' + r.clean.slice(0, 1500);
-  }).join('\n\n');
-
-  const prompt = guide + '\n\n'
-    + '다음은 동일한 양식의 결재문서 ' + results.length + '개입니다. '
-    + '여러 버전을 비교 분석하여 공통 템플릿을 만들어 주세요. '
-    + '매월 바뀌는 값(날짜, 금액, 인원 등)을 변수로 처리하고, JSON 형식으로만 응답하세요.\n\n'
-    + combined
-    + '\n\n응답 형식:\n'
-    + '{"docName":"문서명","titleTemplate":"제목({{변수}})","fields":[{"key":"키","label":"표시명","type":"text|amount|calc","placeholder":"힌트","formula":"","autoFill":true}],"bodyTemplate":"본문"}';
-
-  const resp = await fetch('/api/claude', {
-    method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 4000,
-      messages: [{ role: 'user', content: prompt }] })
-  });
-  const data   = await resp.json();
-  const rawTxt = (data.content && data.content[0] && data.content[0].text) || '';
-  const txt    = rawTxt.replace(/```json[\s\S]*?```|```/g, '').trim();
-  let parsed;
-  try { parsed = JSON.parse(txt); }
-  catch(e) {
-    // JSON 부분 추출 시도
-    const m = txt.match(/\{[\s\S]*\}/);
-    if (m) parsed = JSON.parse(m[0]);
-    else throw e;
+// 파싱 결과 단일 적용 (기존 handleMHT 흐름과 동일)
+async function applyParsedResult(result) {
+  if (result.style) window._mhtStyle = result.style;
+  if (result.title) document.getElementById('m_titleTpl').value = result.title;
+  await analyzeDocText(result.clean, result.title || '');
+  if (!document.getElementById('m_name').value) {
+    document.getElementById('m_name').value = result.name.replace(/\.mh[lt]l?$/i, '');
   }
-  document.getElementById('m_name').value     = parsed.docName || '';
-  document.getElementById('m_titleTpl').value = parsed.titleTemplate || '';
-  document.getElementById('m_body').value     = parsed.bodyTemplate || '';
-  mFields = parsed.fields || [];
-  renderMFields(); detectBodyVars(); showStep3();
 }
 
+// ── 핵심: diff 엔진 ────────────────────────────────────────────
+async function diffAndBuildTemplate(r1, r2) {
+  // 파일명 날짜 기준으로 최신 = 기준 본문
+  const [base, prev] = r1.name > r2.name ? [r1, r2] : [r2, r1];
 
-// 다른 양식 4개 이상 → 각각 분석 후 일괄 저장 선택 화면
-async function analyzeMultiDiffType(results) {
-  // 각 파일 개별 분석
-  const templates = await Promise.all(results.map(async r => {
-    await analyzeDocText(r.clean);
-    return {
-      name: document.getElementById('m_name').value || r.name.replace(/\.mh[lt]l?$/i,''),
-      titleTemplate: document.getElementById('m_titleTpl').value,
-      body: document.getElementById('m_body').value,
-      fields: [...mFields]
-    };
-  }));
+  // 스타일 적용
+  if (base.style) window._mhtStyle = base.style;
 
-  // 다중 템플릿 확인 화면 표시
-  showMultiTemplateReview(templates);
+  // 본문을 라인 단위로 분리
+  const baseLines = base.clean.split('\n');
+  const prevLines = prev.clean.split('\n');
+
+  // diff 수행
+  const { changedLines, changedCells } = computeDiff(base.clean, prev.clean);
+
+  // 제목 diff
+  let titleTemplate = base.title || '';
+  if (base.title && prev.title && base.title !== prev.title) {
+    titleTemplate = diffToTemplate(base.title, prev.title, '제목');
+  }
+
+  // 본문 diff 치환
+  let bodyTemplate = base.clean;
+  const autoFields = [];
+
+  // 라인 diff: 변경된 줄에서 달라진 토큰을 변수로 치환
+  changedLines.forEach(({ baseLine, prevLine, lineIdx }) => {
+    const result = lineToTemplate(baseLine, prevLine, autoFields);
+    if (result !== baseLine) {
+      bodyTemplate = bodyTemplate.replace(baseLine, result);
+    }
+  });
+
+  // 표 셀 diff: [TABLE] 블록 내 변경된 셀을 변수로 치환
+  changedCells.forEach(({ baseVal, prevVal, rowIdx, colIdx, rowLabel }) => {
+    if (!baseVal || !baseVal.trim()) return;
+    const field = inferField(baseVal, prevVal, rowLabel, colIdx, autoFields);
+    if (field) {
+      // 표 내에서 정확히 해당 셀 값만 치환 (앞뒤 구분자 고려)
+      bodyTemplate = replaceCellInTable(bodyTemplate, baseVal, '{{' + field.key + '}}');
+    }
+  });
+
+  // 문서명
+  const docName = base.name
+    .replace(/\.mh[lt]l?$/i, '')
+    .replace(/(_26년|_2026년)[45]월_?/gi, '')
+    .replace(/_+/g, ' ').trim();
+
+  // 중복 필드 제거
+  const uniqueFields = [];
+  const seenKeys = new Set();
+  autoFields.forEach(f => {
+    if (!seenKeys.has(f.key)) { seenKeys.add(f.key); uniqueFields.push(f); }
+  });
+
+  // calc 필드 자동 추론 (부가세, 합계)
+  inferCalcFields(uniqueFields, bodyTemplate);
+
+  // Step3 진입
+  document.getElementById('m_name').value = docName;
+  document.getElementById('m_titleTpl').value = titleTemplate;
+  document.getElementById('m_body').value = bodyTemplate;
+  mFields = uniqueFields;
+
+  const varCount = uniqueFields.length;
+  showStep3('✓ diff 분석 완료 — ' + varCount + '개 변수 자동 생성됨. 확인 후 저장하세요.');
 }
 
-// 다중 템플릿 검토 화면
-function showMultiTemplateReview(templates) {
-  document.getElementById('mStep2').style.display = 'none';
-  // Step3에 탭 형태로 각 템플릿 표시
-  const centerId = document.getElementById('m_center').value;
-  let savedCount = 0;
+// ── diff 계산 ──────────────────────────────────────────────────
+function computeDiff(baseText, prevText) {
+  const baseLines = baseText.split('\n');
+  const prevLines = prevText.split('\n');
+  const changedLines = [];
 
-  const html = `<div style="background:var(--blue-bg);border-radius:var(--r-sm);padding:10px 14px;margin-bottom:14px;font-size:12px;color:var(--blue-t);font-weight:600;">
-    ✓ ${templates.length}개 문서 분석 완료 — 각각 확인 후 일괄 저장하세요
-  </div>
-  <div style="display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap;" id="multiTplTabs">
-    ${templates.map((t,i)=>`<button class="btn ${i===0?'solid':''} sm" onclick="showMultiTab(${i})" id="mtab_${i}">${t.name||'문서'+(i+1)}</button>`).join('')}
-  </div>
-  ${templates.map((t,i)=>`<div id="mtpl_${i}" style="display:${i===0?'block':'none'};">
-    <div class="fg"><div class="flabel">문서명</div>
-      <input type="text" value="${t.name}" oninput="multiTemplates[${i}].name=this.value" style="font-size:13px;">
-    </div>
-    <div class="fg"><div class="flabel">제목 템플릿</div>
-      <input type="text" value="${t.titleTemplate}" oninput="multiTemplates[${i}].titleTemplate=this.value" style="font-size:12px;">
-    </div>
-  </div>`).join('')}
-  <div style="display:flex;gap:8px;margin-top:16px;justify-content:flex-end;">
-    <button class="btn" onclick="closeTplModal()">취소</button>
-    <button class="btn solid" onclick="saveAllMultiTemplates()">전체 저장 (${templates.length}개)</button>
-  </div>`;
+  // 라인 수 맞추기 (같은 위치 비교)
+  const maxLen = Math.max(baseLines.length, prevLines.length);
+  for (let i = 0; i < maxLen; i++) {
+    const b = (baseLines[i] || '').trim();
+    const p = (prevLines[i] || '').trim();
+    if (b && p && b !== p && !b.startsWith('[TABLE') && !b.startsWith('[/TABLE')) {
+      changedLines.push({ baseLine: baseLines[i], prevLine: prevLines[i], lineIdx: i });
+    }
+  }
 
-  window.multiTemplates = templates;
-  document.getElementById('mStep3').innerHTML = html;
-  document.getElementById('mStep3').style.display = 'block';
-}
+  // 표 셀 diff
+  const changedCells = [];
+  const baseTables = extractTableData(baseText);
+  const prevTables = extractTableData(prevText);
 
-function showMultiTab(idx) {
-  document.querySelectorAll('[id^="mtpl_"]').forEach(el => el.style.display = 'none');
-  document.querySelectorAll('[id^="mtab_"]').forEach(el => el.classList.remove('solid'));
-  document.getElementById('mtpl_' + idx).style.display = 'block';
-  document.getElementById('mtab_' + idx).classList.add('solid');
-}
-
-function saveAllMultiTemplates() {
-  const centerId = document.getElementById('m_center').value;
-  (window.multiTemplates || []).forEach(t => {
-    const dd = 0;
-    S.templates.push({
-      id: 't' + Date.now() + Math.random(), name: t.name, centerId,
-      deadline: '', deadlineDay: 0, createdAt: new Date().toISOString().slice(0,10),
-      titleTemplate: t.titleTemplate || t.name + '({{청구연월}})',
-      bodyTemplate: t.body, fields: t.fields || []
+  baseTables.forEach((baseTable, ti) => {
+    const prevTable = prevTables[ti];
+    if (!prevTable) return;
+    baseTable.rows.forEach((baseRow, ri) => {
+      const prevRow = prevTable.rows[ri];
+      if (!prevRow) return;
+      // 행 레이블 (첫 번째 셀)
+      const rowLabel = baseRow[0] || '';
+      baseRow.forEach((baseVal, ci) => {
+        const prevVal = (prevRow[ci] || '');
+        if (baseVal !== prevVal && baseVal.trim() && prevVal.trim()) {
+          changedCells.push({ baseVal, prevVal, rowIdx: ri, colIdx: ci, rowLabel });
+        }
+      });
     });
   });
-  persist(); renderTplList(); closeTplModal();
-  gToast(`${(window.multiTemplates||[]).length}개 템플릿 저장됨`);
+
+  return { changedLines, changedCells };
+}
+
+// 표 데이터 추출
+function extractTableData(text) {
+  const tables = [];
+  const tablePattern = /\[TABLE:[^\]]*\]([\s\S]*?)\[\/TABLE\]/g;
+  let m;
+  while ((m = tablePattern.exec(text)) !== null) {
+    const rows = m[1].trim().split('\n').map(row => row.split('|'));
+    tables.push({ rows });
+  }
+  return tables;
+}
+
+// 라인 diff → 토큰 변수 치환
+function lineToTemplate(baseLine, prevLine, autoFields) {
+  // 공백 기준 토큰 분리 비교
+  const bTokens = baseLine.split(/(\s+)/);
+  const pTokens = prevLine.split(/(\s+)/);
+  let result = baseLine;
+
+  // 월 텍스트 패턴 (가장 흔한 변경)
+  const monthPattern = /(\d{1,2})월/g;
+  const bMonths = [...baseLine.matchAll(monthPattern)].map(m => m[0]);
+  const pMonths = [...prevLine.matchAll(monthPattern)].map(m => m[0]);
+  if (bMonths.length === 1 && pMonths.length === 1 && bMonths[0] !== pMonths[0]) {
+    const key = '보고월';
+    if (!autoFields.find(f => f.key === key)) {
+      autoFields.push({ key, label: '보고 월', type: 'text', placeholder: '예: 5월', formula: '', autoFill: false });
+    }
+    result = result.replace(bMonths[0], '{{' + key + '}}');
+  }
+
+  // 날짜 범위 패턴 (청구기간)
+  const dateRange = /\d{4}\.\s*\d{1,2}\.\s*\d{1,2}\.?\s*~\s*\d{4}\.\s*\d{1,2}\.\s*\d{1,2}/;
+  if (dateRange.test(baseLine) && dateRange.test(prevLine)) {
+    const bDate = baseLine.match(dateRange)?.[0];
+    const pDate = prevLine.match(dateRange)?.[0];
+    if (bDate && pDate && bDate !== pDate) {
+      const key = '청구기간';
+      if (!autoFields.find(f => f.key === key)) {
+        autoFields.push({ key, label: '청구기간', type: 'text', placeholder: '예: 2026.4.20.~5.19.', formula: '', autoFill: false });
+      }
+      result = result.replace(bDate, '{{' + key + '}}');
+    }
+  }
+
+  // 연월 패턴
+  const yearMonth = /\d{4}년\s*\d{1,2}월|\d{2}년\s*\d{1,2}월/g;
+  const bYm = [...baseLine.matchAll(yearMonth)].map(m => m[0]);
+  const pYm = [...prevLine.matchAll(yearMonth)].map(m => m[0]);
+  if (bYm.length > 0 && bYm[0] !== (pYm[0] || '')) {
+    const key = '청구연월';
+    if (!autoFields.find(f => f.key === key)) {
+      autoFields.push({ key, label: '청구 연월', type: 'text', placeholder: '예: 2026년5월', formula: '', autoFill: false });
+    }
+    result = result.replace(bYm[0], '{{' + key + '}}');
+  }
+
+  // 금액 패턴 (원 단위 숫자)
+  const amountPattern = /[\d,]+원/g;
+  const bAmts = [...baseLine.matchAll(amountPattern)].map(m => m[0]);
+  const pAmts = [...prevLine.matchAll(amountPattern)].map(m => m[0]);
+  bAmts.forEach((bAmt, i) => {
+    const pAmt = pAmts[i];
+    if (pAmt && bAmt !== pAmt) {
+      // 컨텍스트로 키 추론
+      const key = inferAmountKey(baseLine, i, autoFields);
+      if (!autoFields.find(f => f.key === key)) {
+        autoFields.push({ key, label: key, type: 'amount', placeholder: '예: ' + bAmt, formula: '', autoFill: i > 0 });
+      }
+      result = result.replace(bAmt, '{{' + key + '}}');
+    }
+  });
+
+  // 날짜 단독 패턴 (세금계산서일 등)
+  const datePattern = /\d{4}년\s*\d{1,2}월\s*\d{1,2}일/g;
+  const bDates = [...baseLine.matchAll(datePattern)].map(m => m[0]);
+  const pDates = [...prevLine.matchAll(datePattern)].map(m => m[0]);
+  if (bDates.length > 0 && bDates[0] !== (pDates[0] || '')) {
+    const key = '세금계산서일';
+    if (!autoFields.find(f => f.key === key)) {
+      autoFields.push({ key, label: '세금계산서 발행일', type: 'text', placeholder: '예: 2026년 5월 28일', formula: '', autoFill: false });
+    }
+    result = result.replace(bDates[0], '{{' + key + '}}');
+  }
+
+  // 변동사유 (- 로 시작하는 자유 서술)
+  if (/^\s*-\s+/.test(baseLine) && baseLine !== prevLine) {
+    const key = '변동사유';
+    if (!autoFields.find(f => f.key === key)) {
+      autoFields.push({ key, label: '변동 사유', type: 'text', placeholder: '예: 청구인원 변동 등', formula: '', autoFill: false });
+      result = result.replace(/(-\s+)(.+)/, '$1{{변동사유}}');
+    }
+  }
+
+  return result;
+}
+
+// 금액 키 컨텍스트 추론
+function inferAmountKey(line, idx, autoFields) {
+  const line_lower = line;
+  if (/전월/.test(line_lower)) return autoFields.find(f=>f.key==='전월청구금액') ? '전월청구금액_' + idx : '전월청구금액';
+  if (/당월|청구/.test(line_lower)) return '당월청구금액';
+  if (/증감|차이|차액/.test(line_lower)) return '증감금액';
+  return '금액_' + (idx + 1);
+}
+
+// 표 셀 → 변수 필드 추론
+function inferField(baseVal, prevVal, rowLabel, colIdx, autoFields) {
+  const cleanBase = baseVal.replace(/[,원건명%]/g, '').trim();
+  const isNumber = /^\d+(\.\d+)?$/.test(cleanBase);
+  const isPercent = /%/.test(baseVal);
+  const isMonth = /[45]월/.test(baseVal);
+
+  // 월 헤더 (예: "4월 실적" → "5월 실적")
+  if (isMonth && colIdx === 0 && /실적|청구|현황/.test(baseVal)) {
+    const key = '실적월';
+    if (!autoFields.find(f => f.key === key)) {
+      autoFields.push({ key, label: '실적 월', type: 'text', placeholder: '예: 5월', formula: '', autoFill: false });
+    }
+    return { key };
+  }
+
+  // 월 단독 셀
+  if (/^\d{1,2}월$/.test(baseVal.trim())) {
+    const key = '보고월';
+    if (!autoFields.find(f => f.key === key)) {
+      autoFields.push({ key, label: '보고 월', type: 'text', placeholder: '예: 5월', formula: '', autoFill: false });
+    }
+    return { key };
+  }
+
+  // 행 레이블 기반 키 생성
+  const cleanLabel = rowLabel.replace(/\s+/g, '').replace(/[○\-·]/g, '');
+  const colName = colIdx === 1 ? '전월' : colIdx === 2 ? '당월' : colIdx === 3 ? '증감' : String(colIdx);
+  const key = (cleanLabel + '_' + colName).slice(0, 20);
+
+  const type = isPercent ? 'text' : isNumber && parseInt(cleanBase) > 1000 ? 'amount' : 'text';
+  const autoFill = colIdx === 1; // 전월 값은 autoFill
+
+  if (!autoFields.find(f => f.key === key)) {
+    autoFields.push({
+      key, label: cleanLabel + ' ' + colName,
+      type, placeholder: '예: ' + baseVal,
+      formula: '', autoFill
+    });
+  }
+  return { key };
+}
+
+// 표 내 셀 값 치환 (| 구분자 기준으로 정확히)
+function replaceCellInTable(bodyTemplate, cellValue, replacement) {
+  // | 앞뒤로 정확히 매칭 (공백 허용)
+  const escaped = cellValue.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const pattern = new RegExp('(^|\\|)(' + escaped + ')(\\||$)', 'gm');
+  return bodyTemplate.replace(pattern, (m, pre, val, post) => pre + replacement + post);
+}
+
+// 제목 diff → 템플릿
+function diffToTemplate(baseTitle, prevTitle, ctx) {
+  // 월 차이
+  const bMonth = baseTitle.match(/\d{1,2}월/)?.[0];
+  const pMonth = prevTitle.match(/\d{1,2}월/)?.[0];
+  if (bMonth && pMonth && bMonth !== pMonth) {
+    return baseTitle.replace(bMonth, '{{보고월}}');
+  }
+  // 연월 차이
+  const bYm = baseTitle.match(/\d{4}년\s*\d{1,2}월|\d{2}년\s*\d{1,2}월/)?.[0];
+  const pYm = prevTitle.match(/\d{4}년\s*\d{1,2}월|\d{2}년\s*\d{1,2}월/)?.[0];
+  if (bYm && pYm && bYm !== pYm) {
+    return baseTitle.replace(bYm, '{{청구연월}}');
+  }
+  return baseTitle;
+}
+
+// calc 필드 자동 추론 (부가세, 합계)
+function inferCalcFields(fields, bodyTemplate) {
+  const keys = fields.map(f => f.key);
+  // 공급가액 있으면 부가세 calc 추가
+  const supplyKey = keys.find(k => /공급가액/.test(k) && !/합계|ASP/.test(k));
+  if (supplyKey && !keys.find(k => /부가세/.test(k))) {
+    fields.push({ key: '부가세', label: '부가세', type: 'calc',
+      placeholder: '', formula: supplyKey + '*0.1', autoFill: false });
+  }
+  // 청구금액합계 calc
+  const supplySum = keys.find(k => /공급가액합계|공급가액_합계/.test(k));
+  const taxSum = keys.find(k => /부가세합계|부가세_합계/.test(k));
+  if (supplySum && taxSum && !keys.find(k => /청구금액합계/.test(k))) {
+    fields.push({ key: '청구금액합계', label: '청구금액 합계', type: 'calc',
+      placeholder: '', formula: supplySum + '+' + taxSum, autoFill: false });
+  }
 }
 
 async function handleMHT(file) {
@@ -3403,54 +3615,6 @@ function renderCalcList() {
     + '</div>';
   }).join('');
 }
-
-// 본문 textarea → display 동기화 ({{변수}} 하이라이트 포함)
-// ── 제목 display 동기화 ──────────────────────────────────────
-function syncTitleToDisplay() {
-  const ta   = document.getElementById('m_titleTpl');
-  const disp = document.getElementById('s3TitleDisplay');
-  if (!ta || !disp) return;
-  const raw = ta.value || '';
-  // {{변수}} 하이라이트
-  const html = escapeHtml(raw).replace(/\{\{([^}]+)\}\}/g, (_, k) => {
-    const isCfg = k.startsWith('cfg_') || k === '붙임연월';
-    return '<mark style="background:'+(isCfg?'var(--s3)':'var(--blue-bg)')+';color:'
-      +(isCfg?'var(--t3)':'var(--blue-t)')+';border-radius:3px;padding:0 2px;font-weight:700;">{{'+k+'}}</mark>';
-  });
-  disp.innerHTML = html || '<span style="color:var(--t3);">제목 없음</span>';
-}
-
-function syncTitleFromDisplay() {
-  const ta   = document.getElementById('m_titleTpl');
-  const disp = document.getElementById('s3TitleDisplay');
-  if (!ta || !disp) return;
-  let html = disp.innerHTML;
-  html = html.replace(/<mark[^>]*>\{\{([^}]+)\}\}<\/mark>/g, '{{$1}}');
-  const tmp = document.createElement('div');
-  tmp.innerHTML = html;
-  ta.value = (tmp.innerText || tmp.textContent || '').trim();
-}
-
-// 제목 드래그 → 변수 지정
-function onTitleSelectionEnd() {
-  const sel = window.getSelection();
-  if (!sel || sel.isCollapsed) return;
-  const selected = sel.toString().trim();
-  if (!selected) return;
-  if (/^\{\{[^}]+\}\}$/.test(selected)) return;
-  // 제목 영역에서만 동작
-  const disp = document.getElementById('s3TitleDisplay');
-  if (!disp || !disp.contains(sel.anchorNode)) return;
-  window._varSelection = { text: selected, target: 'title' };
-  document.getElementById('varSelectedText').textContent = '"' + selected + '"';
-  document.getElementById('varNewKey').value = selected.replace(/[\d,원%건명]/g,'').trim() || '';
-  document.getElementById('varNewType').value = 'text';
-  document.getElementById('varNewAutoFill').checked = false;
-  document.getElementById('varCalcRow').style.display = 'none';
-  document.getElementById('varAssignBox').style.display = 'block';
-  setTimeout(() => document.getElementById('varNewKey').focus(), 50);
-}
-
 
 // ── 제목 display 동기화 ──────────────────────────────────────
 function syncTitleToDisplay() {
@@ -3813,6 +3977,98 @@ function quickAddField(key) {
     renderMFields(); renderCalcList();
     gToast('"' + key + '" 필드 추가됨');
   }
+}
+
+// ── 가이드 적용 후 저장 ──────────────────────────────────────
+async function saveWithGuide() {
+  syncTitleFromDisplay();
+  syncBodyFromDisplay();
+
+  const name = document.getElementById('m_name').value.trim();
+  if (!name) { alert('문서명을 입력하세요.'); return; }
+
+  const body = document.getElementById('m_body').value.trim();
+  if (!body) { saveTpl(); return; } // 본문 없으면 그냥 저장
+
+  const guide = S.cfg.guide || DEFAULT_GUIDE;
+  const btn = document.getElementById('saveGuideBtn');
+  btn.textContent = '⏳ 가이드 적용 중...';
+  btn.disabled = true;
+
+  // [TABLE:...] 블록과 {{변수}} 를 임시 토큰으로 치환 (AI가 건드리지 않도록)
+  const tableTokens = [];
+  const varTokens = [];
+  let protected_body = body;
+
+  // [TABLE] 블록 보호
+  protected_body = protected_body.replace(/\[TABLE:([^\]]*)\]([\s\S]*?)\[\/TABLE\]/g, (match) => {
+    const token = '__TABLE_' + tableTokens.length + '__';
+    tableTokens.push(match);
+    return token;
+  });
+
+  // {{변수}} 보호
+  protected_body = protected_body.replace(/\{\{([^}]+)\}\}/g, (match) => {
+    const token = '__VAR_' + varTokens.length + '__';
+    varTokens.push(match);
+    return token;
+  });
+
+  const prompt = guide + '\n\n'
+    + '아래 공문서 본문의 서식만 위 가이드에 맞게 교정하세요.\n\n'
+    + '반드시 지켜야 할 규칙:\n'
+    + '1. 내용·수치는 절대 수정하지 말 것\n'
+    + '2. __TABLE_N__ 형태 토큰은 절대 수정·이동하지 말 것\n'
+    + '3. __VAR_N__ 형태 토큰은 절대 수정·이동하지 말 것\n'
+    + '4. 교정 대상: 항목기호(1./가./○/-/·), 들여쓰기(2칸씩), 날짜표기(마침표), 끝. 위치\n'
+    + '5. 은행명·계좌번호·담당자 등 고정 정보는 변경하지 말 것\n'
+    + '6. 교정된 본문 텍스트만 출력, 설명·주석 없이\n\n'
+    + '원본 본문:\n' + protected_body;
+
+  try {
+    const resp = await fetch('/api/claude', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-6', max_tokens: 4000,
+        messages: [{ role: 'user', content: prompt }]
+      })
+    });
+    if (!resp.ok) throw new Error('API ' + resp.status);
+
+    const data = await resp.json();
+    let corrected = (data.content?.[0]?.text || '').trim();
+
+    // 토큰 복원: {{변수}} 먼저
+    varTokens.forEach((original, i) => {
+      corrected = corrected.replace(new RegExp('__VAR_' + i + '__', 'g'), original);
+    });
+    // 토큰 복원: [TABLE] 블록
+    tableTokens.forEach((original, i) => {
+      corrected = corrected.replace(new RegExp('__TABLE_' + i + '__', 'g'), original);
+    });
+
+    // 복원 후 검증: 토큰이 남아있으면 원본 사용
+    if (/__TABLE_\d+__|__VAR_\d+__/.test(corrected)) {
+      console.warn('토큰 복원 실패 — 원본 사용');
+      corrected = body;
+      gToast('⚠️ 가이드 적용 실패 — 원본으로 저장합니다');
+    } else {
+      gToast('✓ 가이드 서식 적용됨');
+    }
+
+    document.getElementById('m_body').value = corrected;
+    syncBodyToDisplay();
+
+  } catch(e) {
+    console.warn('가이드 적용 실패:', e.message);
+    gToast('⚠️ 가이드 적용 실패 — 원본으로 저장합니다');
+  }
+
+  btn.textContent = '✨ 가이드 적용 후 저장';
+  btn.disabled = false;
+
+  // 가이드 적용 완료 후 저장 실행
+  saveTpl();
 }
 
 function saveTpl() {
