@@ -382,6 +382,10 @@ textarea { resize: vertical; min-height: 64px; line-height: 1.65; }
   background: var(--surface); border-radius: var(--r-lg);
   padding: 26px 28px; box-shadow: 0 8px 40px rgba(0,0,0,.18);
 }
+/* Step3 활성화 시 모달 풀와이드 */
+.modal.step3-wide {
+  max-width: 1100px;
+}
 .modal-header {
   display: flex; align-items: center; justify-content: space-between;
   margin-bottom: 20px;
@@ -1047,18 +1051,20 @@ textarea { resize: vertical; min-height: 64px; line-height: 1.65; }
       <p>변동 필드와 자동계산 항목을 자동으로 감지합니다</p>
     </div>
 
-    <!-- STEP 3: 새 편집 화면 (드래그 변수 지정 방식) -->
+    <!-- STEP 3: 드래그 변수 지정 편집 화면 -->
     <div id="mStep3" style="display:none;">
-      <!-- 상단 알림 배너 (AI완료/직접입력 등 상황에 따라 변경) -->
-      <div id="s3Banner" style="background:var(--green-bg);border-radius:var(--r-sm);padding:9px 13px;margin-bottom:14px;font-size:12px;color:var(--green-t);font-weight:600;">
+
+      <!-- 알림 배너 -->
+      <div id="s3Banner" style="background:var(--green-bg);border-radius:var(--r-sm);
+        padding:7px 12px;margin-bottom:10px;font-size:11px;color:var(--green-t);font-weight:600;">
         ✓ 본문에서 바꿀 부분을 드래그해서 변수로 지정하세요
       </div>
 
-      <!-- 기본 정보 (1줄 압축) -->
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px;margin-bottom:12px;">
+      <!-- 상단 메타정보 2행 -->
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px;margin-bottom:8px;">
         <div class="fg">
           <div class="flabel">문서명 *</div>
-          <input type="text" id="m_name" placeholder="예: 위탁수수료 청구">
+          <input type="text" id="m_name" placeholder="예: 운영보고">
         </div>
         <div class="fg">
           <div class="flabel">센터 *</div>
@@ -1080,98 +1086,108 @@ textarea { resize: vertical; min-height: 64px; line-height: 1.65; }
           <input type="text" id="m_deadline" placeholder="예: 매월 21일">
         </div>
       </div>
-      <div class="fg" style="margin-bottom:12px;">
-        <div class="flabel">제목 템플릿</div>
-        <input type="text" id="m_titleTpl" placeholder="예: 케이뱅크 위탁수수료 청구({{청구연월}})">
+      <!-- 제목 템플릿 행 — 드래그 변수 지정 가능 -->
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:10px;">
+        <div class="fg" style="flex:1;margin-bottom:0;">
+          <div class="flabel" style="margin-bottom:3px;">
+            제목 템플릿
+            <span style="font-size:10px;color:var(--blue-t);margin-left:6px;">💡 드래그 → 변수 지정 가능</span>
+          </div>
+          <div id="s3TitleDisplay" contenteditable="true"
+            style="padding:6px 10px;border:1px solid var(--border2);border-radius:var(--r-sm);
+              font-size:13px;font-weight:600;outline:none;background:var(--surface);
+              min-height:34px;line-height:1.6;cursor:text;"
+            onmouseup="onTitleSelectionEnd()"
+            onkeyup="syncTitleFromDisplay()">
+          </div>
+          <input type="hidden" id="m_titleTpl">
+        </div>
       </div>
-      <div class="divider"></div>
+      <div class="divider" style="margin:8px 0;"></div>
 
-      <!-- 2단 레이아웃: 본문편집(좌) + 변수목록(우) -->
-      <div style="display:grid;grid-template-columns:1fr 300px;gap:14px;margin-top:12px;">
+      <!-- 메인 2단: 본문(좌 넓게) + 변수패널(우 고정) -->
+      <div style="display:grid;grid-template-columns:1fr 260px;gap:12px;">
 
-        <!-- 좌: 본문 편집 영역 -->
-        <div>
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+        <!-- 좌: 본문 편집 -->
+        <div style="display:flex;flex-direction:column;min-height:0;">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:5px;">
             <div class="fs12 fw7">본문 템플릿</div>
-            <div style="font-size:11px;color:var(--blue-t);background:var(--blue-bg);
-              padding:3px 9px;border-radius:20px;font-weight:600;">
-              💡 바꿀 텍스트를 드래그 → 변수 지정
-            </div>
+            <span style="font-size:10px;color:var(--blue-t);background:var(--blue-bg);
+              padding:2px 8px;border-radius:20px;font-weight:600;">드래그 → 변수 지정</span>
           </div>
-          <!-- 드래그 감지용 contenteditable div (렌더용) -->
           <div id="s3BodyDisplay" contenteditable="true"
-            style="min-height:220px;max-height:340px;overflow-y:auto;
-              padding:12px 14px;border:1px solid var(--border2);border-radius:var(--r);
-              font-family:monospace;font-size:12px;line-height:1.8;
-              background:var(--surface);white-space:pre-wrap;word-break:break-all;
-              cursor:text;outline:none;"
+            style="flex:1;min-height:420px;overflow-y:auto;
+              padding:14px 16px;border:1px solid var(--border2);border-radius:var(--r);
+              background:var(--surface);cursor:text;outline:none;
+              word-break:break-all;white-space:pre-wrap;"
             onmouseup="onBodySelectionEnd()"
-            onkeyup="syncBodyFromDisplay()"
-            placeholder="여기에 문서 본문이 표시됩니다...">
+            onkeyup="syncBodyFromDisplay()">
           </div>
-          <!-- 숨겨진 실제 저장용 textarea -->
           <textarea id="m_body" style="display:none;"></textarea>
-          <div style="font-size:11px;color:var(--t3);margin-top:5px;line-height:1.6;">
-            표 문법: <code style="background:var(--s2);padding:1px 4px;border-radius:3px;">[TABLE:이름] 헤더|컬럼 행 [/TABLE]</code> &nbsp;
-            AI분석: <code style="background:var(--s2);padding:1px 4px;border-radius:3px;">[AI_ANALYSIS]</code>
+          <div style="font-size:10px;color:var(--t3);margin-top:4px;">
+            표: <code style="background:var(--s2);padding:1px 3px;border-radius:2px;">[TABLE:이름]헤더|컬럼[/TABLE]</code>
+            &nbsp; AI분석: <code style="background:var(--s2);padding:1px 3px;border-radius:2px;">[AI_ANALYSIS]</code>
           </div>
         </div>
 
-        <!-- 우: 변수 목록 패널 -->
-        <div style="display:flex;flex-direction:column;gap:0;">
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
-            <div class="fs12 fw7">변수 목록</div>
-            <button class="btn sm" onclick="addMField()" style="font-size:11px;">+ 직접 추가</button>
-          </div>
-          <!-- 변수 지정 팝업 (드래그 후 표시) -->
-          <div id="varAssignBox" style="display:none;background:var(--blue-bg);border:1.5px solid var(--blue);
-            border-radius:var(--r);padding:10px 12px;margin-bottom:8px;">
-            <div style="font-size:11px;font-weight:700;color:var(--blue-t);margin-bottom:7px;">
-              선택된 텍스트를 변수로 지정
+        <!-- 우: 변수 패널 -->
+        <div style="display:flex;flex-direction:column;gap:8px;min-height:0;">
+
+          <!-- 변수 지정 팝업 -->
+          <div id="varAssignBox" style="display:none;background:var(--blue-bg);
+            border:1.5px solid var(--blue);border-radius:var(--r);padding:10px 12px;">
+            <div style="font-size:11px;font-weight:700;color:var(--blue-t);margin-bottom:6px;">
+              변수 지정
             </div>
-            <div style="font-size:11px;color:var(--t2);margin-bottom:5px;">
-              선택값: <span id="varSelectedText" style="font-weight:600;color:var(--text);"></span>
+            <div style="font-size:10px;color:var(--t2);margin-bottom:5px;">
+              선택: <span id="varSelectedText" style="font-weight:600;color:var(--text);"></span>
             </div>
             <input type="text" id="varNewKey" placeholder="변수명 (예: 총인원)"
-              style="width:100%;margin-bottom:6px;font-size:12px;"
+              style="width:100%;margin-bottom:5px;font-size:12px;"
               onkeydown="if(event.key==='Enter')confirmVarAssign()">
-            <div style="display:flex;gap:4px;margin-bottom:6px;">
+            <div style="display:flex;gap:4px;margin-bottom:5px;">
               <select id="varNewType" style="flex:1;font-size:11px;">
                 <option value="text">텍스트</option>
                 <option value="amount">금액</option>
                 <option value="calc">자동계산</option>
               </select>
-              <label style="display:flex;align-items:center;gap:3px;font-size:11px;white-space:nowrap;">
-                <input type="checkbox" id="varNewAutoFill" checked style="width:13px;height:13px;">자동채움
+              <label style="display:flex;align-items:center;gap:3px;font-size:10px;white-space:nowrap;">
+                <input type="checkbox" id="varNewAutoFill" checked style="width:12px;height:12px;">자동채움
               </label>
             </div>
-            <!-- calc 수식 입력 (calc 선택 시 표시) -->
-            <div id="varCalcRow" style="display:none;margin-bottom:6px;">
+            <div id="varCalcRow" style="display:none;margin-bottom:5px;">
               <input type="text" id="varNewFormula" placeholder="수식 (예: 당월공급가액*0.1)"
                 style="width:100%;font-size:11px;">
             </div>
-            <div style="display:flex;gap:5px;">
-              <button class="btn sm" onclick="cancelVarAssign()" style="flex:1;">취소</button>
-              <button class="btn solid sm" onclick="confirmVarAssign()" style="flex:1;">지정</button>
+            <div style="display:flex;gap:4px;">
+              <button class="btn sm" onclick="cancelVarAssign()" style="flex:1;font-size:11px;">취소</button>
+              <button class="btn solid sm" onclick="confirmVarAssign()" style="flex:1;font-size:11px;">지정</button>
             </div>
           </div>
 
-          <!-- 등록된 변수 목록 -->
-          <div id="m_fieldList" style="flex:1;overflow-y:auto;max-height:260px;
-            border:1px solid var(--border);border-radius:var(--r);padding:4px;"></div>
+          <!-- 변수 목록 -->
+          <div>
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
+              <div class="fs11 fw7">변수 목록</div>
+              <button class="btn sm" onclick="addMField()" style="font-size:10px;padding:3px 7px;">+ 추가</button>
+            </div>
+            <div id="m_fieldList" style="overflow-y:auto;max-height:200px;
+              border:1px solid var(--border);border-radius:var(--r);padding:3px;"></div>
+          </div>
 
-          <!-- 자동계산 필드 섹션 -->
-          <div style="margin-top:8px;">
-            <div style="font-size:11px;font-weight:700;color:var(--t2);margin-bottom:5px;">자동계산 수식 편집</div>
+          <!-- 자동계산 -->
+          <div>
+            <div class="fs11 fw7" style="margin-bottom:4px;">자동계산</div>
             <div id="m_calcList" style="border:1px solid var(--border);border-radius:var(--r);
-              padding:4px;max-height:120px;overflow-y:auto;">
-              <div style="font-size:11px;color:var(--t3);padding:6px;">자동계산 필드 없음</div>
+              padding:3px;max-height:160px;overflow-y:auto;">
+              <div style="font-size:11px;color:var(--t3);padding:6px;">없음</div>
             </div>
           </div>
         </div>
       </div>
 
-      <div style="display:flex;gap:8px;margin-top:16px;justify-content:flex-end;border-top:1px solid var(--border);padding-top:12px;">
+      <div style="display:flex;gap:8px;margin-top:12px;justify-content:flex-end;
+        border-top:1px solid var(--border);padding-top:10px;">
         <button class="btn" onclick="closeTplModal()">취소</button>
         <button class="btn solid" onclick="saveTpl()">💾 저장</button>
       </div>
@@ -2903,25 +2919,36 @@ function openTplModal() {
   if (vab) vab.style.display = 'none';
   const disp = document.getElementById('s3BodyDisplay');
   if (disp) disp.innerHTML = '';
+  const titleDisp = document.getElementById('s3TitleDisplay');
+  if (titleDisp) titleDisp.innerHTML = '';
   document.getElementById('tplModal').classList.add('open');
 }
-function closeTplModal() { document.getElementById('tplModal').classList.remove('open'); }
+function closeTplModal() {
+  document.getElementById('tplModal').classList.remove('open');
+  const modalEl = document.querySelector('#tplModal .modal');
+  if (modalEl) modalEl.classList.remove('step3-wide');
+}
 function showStep3(banner) {
   document.getElementById('mStep1').style.display = 'none';
   document.getElementById('mStep2').style.display = 'none';
   document.getElementById('mStep3').style.display = 'block';
+  // 모달 와이드 전환
+  const modalEl = document.querySelector('#tplModal .modal');
+  if (modalEl) modalEl.classList.add('step3-wide');
+
   const bannerEl = document.getElementById('s3Banner');
   if (bannerEl && banner) bannerEl.textContent = banner;
-  // MHT 스타일이 있으면 설정에 자동 반영
+
+  // MHT 스타일이 있으면 설정에 자동 반영, 없으면 공통 가이드 기준 유지
   if (window._mhtStyle) {
     const st = window._mhtStyle;
     if (st.fontSize)   S.cfg.fsize  = st.fontSize;
     if (st.fontFamily) S.cfg.font   = st.fontFamily;
     if (st.lineHeight) S.cfg.lh     = st.lineHeight;
-    window._mhtStyle = null; // 1회 적용 후 초기화
-    // 배너에 스타일 적용 안내 추가
-    if (bannerEl) bannerEl.textContent += '  |  폰트: ' + st.fontFamily + ' ' + st.fontSize + ' / 줄간격: ' + st.lineHeight;
+    window._mhtStyle = null;
+    if (bannerEl) bannerEl.textContent += '  ·  ' + st.fontFamily + ' ' + st.fontSize + ' / 줄간격 ' + st.lineHeight;
   }
+  syncTitleToDisplay();
   syncBodyToDisplay();
   renderMFields();
   renderCalcList();
@@ -3023,15 +3050,18 @@ ${clean}
       else throw e;
     }
     document.getElementById('m_name').value     = parsed.docName || '';
-    document.getElementById('m_titleTpl').value = parsed.titleTemplate || '';
+    // 제목: AI가 준 titleTemplate 사용, 없으면 MHT 제목 직접 활용
+    const titleTpl = parsed.titleTemplate || '';
+    document.getElementById('m_titleTpl').value = titleTpl;
     document.getElementById('m_body').value     = parsed.bodyTemplate || '';
     mFields = parsed.fields || [];
     if (parsed.contactInfo) showContactInfoReview(parsed.contactInfo);
-    showStep3('✓ AI 분석 완료 — 바꿀 텍스트를 드래그해서 변수를 추가하거나 수정하세요');
+    showStep3('✓ AI 분석 완료 — 제목/본문에서 바꿀 텍스트를 드래그해서 변수를 지정하세요');
   } catch(e) {
     console.warn('analyzeDocText 실패:', e.message);
     // API 실패 → 텍스트를 본문에 그대로 넣고 수동 편집 모드로 진입
     document.getElementById('m_name').value = '';
+    document.getElementById('m_titleTpl').value = '';
     document.getElementById('m_body').value = clean;
     mFields = [];
     showStep3('⚠️ AI 분석 실패 (' + e.message + ') — 본문을 직접 확인하고 드래그로 변수를 지정하세요');
@@ -3298,6 +3328,7 @@ async function handleMHT(file) {
       .replace(/[ \t]+/g,' ').replace(/\n{3,}/g,'\n\n').trim().slice(0,3500);
     await analyzeDocText(clean);
   }
+  // 문서명 미설정이면 파일명으로 보완 (AI가 docName 설정했으면 우선)
   if (!document.getElementById('m_name').value) {
     document.getElementById('m_name').value = file.name.replace(/\.mh[lt]l?$/i, '');
   }
@@ -3367,6 +3398,96 @@ function renderCalcList() {
 }
 
 // 본문 textarea → display 동기화 ({{변수}} 하이라이트 포함)
+// ── 제목 display 동기화 ──────────────────────────────────────
+function syncTitleToDisplay() {
+  const ta   = document.getElementById('m_titleTpl');
+  const disp = document.getElementById('s3TitleDisplay');
+  if (!ta || !disp) return;
+  const raw = ta.value || '';
+  // {{변수}} 하이라이트
+  const html = escapeHtml(raw).replace(/\{\{([^}]+)\}\}/g, (_, k) => {
+    const isCfg = k.startsWith('cfg_') || k === '붙임연월';
+    return '<mark style="background:'+(isCfg?'var(--s3)':'var(--blue-bg)')+';color:'
+      +(isCfg?'var(--t3)':'var(--blue-t)')+';border-radius:3px;padding:0 2px;font-weight:700;">{{'+k+'}}</mark>';
+  });
+  disp.innerHTML = html || '<span style="color:var(--t3);">제목 없음</span>';
+}
+
+function syncTitleFromDisplay() {
+  const ta   = document.getElementById('m_titleTpl');
+  const disp = document.getElementById('s3TitleDisplay');
+  if (!ta || !disp) return;
+  let html = disp.innerHTML;
+  html = html.replace(/<mark[^>]*>\{\{([^}]+)\}\}<\/mark>/g, '{{$1}}');
+  const tmp = document.createElement('div');
+  tmp.innerHTML = html;
+  ta.value = (tmp.innerText || tmp.textContent || '').trim();
+}
+
+// 제목 드래그 → 변수 지정
+function onTitleSelectionEnd() {
+  const sel = window.getSelection();
+  if (!sel || sel.isCollapsed) return;
+  const selected = sel.toString().trim();
+  if (!selected) return;
+  if (/^\{\{[^}]+\}\}$/.test(selected)) return;
+  // 제목 영역에서만 동작
+  const disp = document.getElementById('s3TitleDisplay');
+  if (!disp || !disp.contains(sel.anchorNode)) return;
+  window._varSelection = { text: selected, target: 'title' };
+  document.getElementById('varSelectedText').textContent = '"' + selected + '"';
+  document.getElementById('varNewKey').value = selected.replace(/[\d,원%건명]/g,'').trim() || '';
+  document.getElementById('varNewType').value = 'text';
+  document.getElementById('varNewAutoFill').checked = false;
+  document.getElementById('varCalcRow').style.display = 'none';
+  document.getElementById('varAssignBox').style.display = 'block';
+  setTimeout(() => document.getElementById('varNewKey').focus(), 50);
+}
+
+
+// ── 제목 display 동기화 ──────────────────────────────────────
+function syncTitleToDisplay() {
+  const ta   = document.getElementById('m_titleTpl');
+  const disp = document.getElementById('s3TitleDisplay');
+  if (!ta || !disp) return;
+  const raw = ta.value || '';
+  const html = escapeHtml(raw).replace(/\{\{([^}]+)\}\}/g, function(_, k) {
+    const isCfg = k.startsWith('cfg_') || k === '붙임연월';
+    return '<mark style="background:'+(isCfg?'var(--s3)':'var(--blue-bg)')+';color:'
+      +(isCfg?'var(--t3)':'var(--blue-t)')+';border-radius:3px;padding:0 2px;font-weight:700;">{{'+k+'}}</mark>';
+  });
+  disp.innerHTML = html || '<span style="color:var(--t3);">제목을 입력하세요</span>';
+}
+
+function syncTitleFromDisplay() {
+  const ta   = document.getElementById('m_titleTpl');
+  const disp = document.getElementById('s3TitleDisplay');
+  if (!ta || !disp) return;
+  let html = disp.innerHTML;
+  html = html.replace(/<mark[^>]*>\{\{([^}]+)\}\}<\/mark>/g, '{{$1}}');
+  const tmp = document.createElement('div');
+  tmp.innerHTML = html;
+  ta.value = (tmp.innerText || tmp.textContent || '').trim();
+}
+
+function onTitleSelectionEnd() {
+  const sel = window.getSelection();
+  if (!sel || sel.isCollapsed) return;
+  const selected = sel.toString().trim();
+  if (!selected) return;
+  if (/^\{\{[^}]+\}\}$/.test(selected)) return;
+  const disp = document.getElementById('s3TitleDisplay');
+  if (!disp || !disp.contains(sel.anchorNode)) return;
+  window._varSelection = { text: selected, target: 'title' };
+  document.getElementById('varSelectedText').textContent = '"' + selected + '"';
+  document.getElementById('varNewKey').value = '';
+  document.getElementById('varNewType').value = 'text';
+  document.getElementById('varNewAutoFill').checked = false;
+  document.getElementById('varCalcRow').style.display = 'none';
+  document.getElementById('varAssignBox').style.display = 'block';
+  setTimeout(function() { document.getElementById('varNewKey').focus(); }, 50);
+}
+
 function syncBodyToDisplay() {
   const ta = document.getElementById('m_body');
   const disp = document.getElementById('s3BodyDisplay');
@@ -3546,14 +3667,36 @@ function confirmVarAssign() {
     mFields.push({ key, label: key, type, placeholder: '', formula, autoFill });
   }
 
-  // 본문에서 선택된 텍스트를 {{키}}로 교체
-  const ta = document.getElementById('m_body');
-  const disp = document.getElementById('s3BodyDisplay');
-  if (ta && selectedText) {
-    // textarea 기준으로 교체 (첫 번째 매칭만)
-    ta.value = ta.value.replace(selectedText, '{{' + key + '}}');
-    syncBodyToDisplay();
-    // 또는 display 기준 selection 교체
+  const isTitle = window._varSelection?.target === 'title';
+
+  if (isTitle) {
+    // 제목 영역 변수 교체
+    const taTpl = document.getElementById('m_titleTpl');
+    if (taTpl && selectedText) {
+      taTpl.value = taTpl.value.replace(selectedText, '{{' + key + '}}');
+    }
+    // display selection 교체
+    const sel = window.getSelection();
+    if (sel && !sel.isCollapsed) {
+      try {
+        const range = sel.getRangeAt(0);
+        range.deleteContents();
+        const mark = document.createElement('mark');
+        mark.style.cssText = 'background:var(--blue-bg);color:var(--blue-t);border-radius:3px;padding:0 2px;font-weight:700;';
+        mark.textContent = '{{' + key + '}}';
+        range.insertNode(mark);
+        sel.removeAllRanges();
+        syncTitleFromDisplay();
+      } catch(e) {}
+    }
+    syncTitleToDisplay();
+  } else {
+    // 본문 영역 변수 교체
+    const ta = document.getElementById('m_body');
+    if (ta && selectedText) {
+      ta.value = ta.value.replace(selectedText, '{{' + key + '}}');
+      syncBodyToDisplay();
+    }
     const sel = window.getSelection();
     if (sel && !sel.isCollapsed) {
       try {
@@ -3566,7 +3709,7 @@ function confirmVarAssign() {
         sel.removeAllRanges();
         syncBodyFromDisplay();
         syncBodyToDisplay();
-      } catch(e) { /* fallback: textarea 교체로 충분 */ }
+      } catch(e) {}
     }
   }
 
@@ -3666,7 +3809,8 @@ function quickAddField(key) {
 }
 
 function saveTpl() {
-  // display → textarea 최종 동기화
+  // display → hidden 최종 동기화
+  syncTitleFromDisplay();
   syncBodyFromDisplay();
   const name     = document.getElementById('m_name').value.trim();
   const centerId = document.getElementById('m_center').value;
