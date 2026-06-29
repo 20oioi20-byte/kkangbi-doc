@@ -15,8 +15,11 @@ export default async function handler(req, res) {
 
   if (body.type === 'parse_mht') {
     try {
-      const clean = parseMHT(body.content || '');
-      return res.status(200).json({ clean });
+      const result = parseMHT(body.content || '');
+      // result가 {clean, style} 객체이거나 이전 버전 string일 수 있음
+      const clean = typeof result === 'string' ? result : result.clean;
+      const style = typeof result === 'object' ? result.style : null;
+      return res.status(200).json({ clean, style });
     } catch (e) {
       return res.status(500).json({ error: 'MHT 파싱 실패: ' + e.message });
     }
@@ -76,11 +79,21 @@ function parseMHT(raw) {
 
   if (!htmlContent) htmlContent = decodeQP(raw);
 
-  return extractDocContent(htmlContent).slice(0, 5000);
+  const { text, style } = extractDocContent(htmlContent);
+  return { clean: text.slice(0, 5000), style };
 }
 
 // ── Kaoni 공문서 핵심 추출: 제목 + 본문만 ──────────────────
 function extractDocContent(html) {
+  // 스타일 추출 (폰트/크기/줄간격)
+  const fontMatch  = html.match(/FONT-SIZE:\s*(\d+pt)/i);
+  const familyMatch= html.match(/FONT-FAMILY:\s*['"]*([^'";,]+)/i);
+  const lhMatch    = html.match(/line-height\s*:\s*(\d+(?:\.\d+)?)/i);
+  const docStyle = {
+    fontSize:   fontMatch   ? fontMatch[1]               : '12pt',
+    fontFamily: familyMatch ? familyMatch[1].replace(/&quot;/g,'').trim() : '맑은 고딕',
+    lineHeight: lhMatch     ? (parseFloat(lhMatch[1]) * 100) + '%' : '200%',
+  };
   html = html
     .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
     .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
@@ -124,7 +137,8 @@ function extractDocContent(html) {
   });
 
   const bodyText = cleaned.join('\n').replace(/\n{3,}/g, '\n\n').trim();
-  return (titleText ? '제목: ' + titleText + '\n\n' : '') + bodyText;
+  const text = (titleText ? '제목: ' + titleText + '\n\n' : '') + bodyText;
+  return { text, style: docStyle };
 }
 
 // ── HTML → 표 구조 보존 텍스트 ──────────────────────────────
