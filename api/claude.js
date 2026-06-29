@@ -1,83 +1,80 @@
-// api/claude.js
-module.exports = async function handler(req, res) {
+// api/claude.js — Claude API 프록시 + MHT Base64/QP 서버사이드 파싱
+// Vercel 환경변수: ANTHROPIC_API_KEY
+
+export default async function handler(req, res) {
+  // CORS 헤더
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-  
   if (req.method === 'OPTIONS') return res.status(200).end();
-  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) return res.status(500).json({ error: 'API key not configured' });
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
 
-  try {
-    // MHT 파싱 요청
-    if (req.body && req.body.type === 'parse_mht') {
-      const clean = parseMHT(req.body.content || '');
+  const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
+  if (!ANTHROPIC_API_KEY) {
+    return res.status(500).json({ error: 'ANTHROPIC_API_KEY 환경변수 미설정' });
+  }
+
+  const body = req.body || {};
+
+  // ── MHT 파싱 모드 ──────────────────────────────────────────
+  if (body.type === 'parse_mht') {
+    try {
+      const raw = body.content || '';
+      const clean = parseMHT(raw);
       return res.status(200).json({ clean });
+    } catch (e) {
+      return res.status(500).json({ error: 'MHT 파싱 실패: ' + e.message });
     }
+  }
 
-    // Claude API 프록시
-    const body = Object.assign({}, req.body);
-    delete body.type;
-
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
+  // ── Claude API 프록시 모드 ──────────────────────────────────
+  try {
+    const r = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01'
+        'Content-Type':         'application/json',
+        'x-api-key':            ANTHROPIC_API_KEY,
+        'anthropic-version':    '2023-06-01',
       },
-      body: JSON.stringify(body)
+      body: JSON.stringify({
+        model:      body.model      || 'claude-sonnet-4-6',
+        max_tokens: body.max_tokens || 4000,
+        system:     body.system,
+        messages:   body.messages,
+        tools:      body.tools,
+      }),
     });
 
-    const data = await response.json();
-    return res.status(response.status).json(data);
-  } catch (err) {
-    return res.status(500).json({ error: err.message });
+    const data = await r.json();
+    return res.status(r.status).json(data);
+  } catch (e) {
+    return res.status(500).json({ error: e.message });
   }
-};
+}
 
-function parseMHT(mhtText) {
-  const parts = mhtText.split(/--[^\r\n]+/);
-  let htmlPart = '';
-  let encoding = '';
+// ── MHT 파싱 유틸 ──────────────────────────────────────────────
+function parseMHT(raw) {
+  // Quoted-Printable 디코딩
+  let decoded = raw
+    .replace(/=\r?\n/g, '')                                  // 소프트 줄바꿈 제거
+    .replace(/=([0-9A-Fa-f]{2})/g, (_, h) =>
+      String.fromCharCode(parseInt(h, 16))                   // QP 이스케이프 → 문자
+    );
 
-  for (const part of parts) {
-    if (!part.includes('Content-Type')) continue;
-    const ctMatch = part.match(/Content-Type:\s*([^\r\n;]+)/i);
-    const ct = (ctMatch && ctMatch[1]) ? ctMatch[1].trim().toLowerCase() : '';
-    if (!ct.includes('text/html') && !ct.includes('text/plain')) continue;
-
-    const encMatch = part.match(/Content-Transfer-Encoding:\s*([^\r\n]+)/i);
-    encoding = (encMatch && encMatch[1]) ? encMatch[1].trim().toLowerCase() : 'none';
-
-    const bodyMatch = part.match(/\r?\n\r?\n([\s\S]+)$/);
-    if (bodyMatch) { htmlPart = bodyMatch[1].trim(); break; }
-  }
-
-  if (!htmlPart) {
-    const bodyMatch = mhtText.match(/\r?\n\r?\n([\s\S]+)$/);
-    htmlPart = bodyMatch ? bodyMatch[1].trim() : mhtText;
-    const encMatch = mhtText.match(/Content-Transfer-Encoding:\s*([^\r\n]+)/i);
-    encoding = (encMatch && encMatch[1]) ? encMatch[1].trim().toLowerCase() : 'none';
-  }
-
-  let decoded = htmlPart;
-
-  if (encoding === 'base64') {
+  // Base64 인코딩된 파트 디코딩 시도
+  const b64Match = decoded.match(/Content-Transfer-Encoding:\s*base64[\s\S]*?\n\n([\s\S]+?)(?=--|\n--)/i);
+  if (b64Match) {
     try {
-      decoded = Buffer.from(htmlPart.replace(/\s+/g, ''), 'base64').toString('utf-8');
-    } catch (e) { decoded = htmlPart; }
-  } else if (encoding === 'quoted-printable') {
-    decoded = decoded
-      .replace(/=\r?\n/g, '')
-      .replace(/=([0-9A-Fa-f]{2})/g, function(_, h) {
-        return String.fromCharCode(parseInt(h, 16));
-      });
+      const b64 = b64Match[1].replace(/\s/g, '');
+      decoded = Buffer.from(b64, 'base64').toString('utf-8');
+    } catch (e) { /* base64 디코딩 실패 시 QP 결과 사용 */ }
   }
 
-  return decoded
+  // HTML 태그 제거 → 순수 텍스트 추출
+  const clean = decoded
     .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
     .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
     .replace(/<[^>]+>/g, ' ')
@@ -85,8 +82,11 @@ function parseMHT(mhtText) {
     .replace(/&amp;/g, '&')
     .replace(/&lt;/g, '<')
     .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
     .replace(/[ \t]+/g, ' ')
     .replace(/\n{3,}/g, '\n\n')
     .trim()
-    .slice(0, 4000);
+    .slice(0, 4000);                                         // Claude 토큰 절약
+
+  return clean;
 }
