@@ -861,7 +861,6 @@ let state = {
   fileB: null,   // 최신달 MHT (ArrayBuffer)
   htmlA: null,
   htmlB: null,
-  diffCells: [],       // [{cellIndex, textA, textB, id, isField}]
   vars: [],            // [{key, type, formula, example, cellIndices}]
   templateHtml: null,  // 최신 파일 HTML (변수 치환 전)
   tplBodyHtml: null,   // body FIELD 내용
@@ -911,214 +910,233 @@ async function parseMht(arrayBuffer) {
 }
 
 // ===================================================
-// DIFF ENGINE
+// DIFF ENGINE (텍스트 노드 기반, DOM 인덱스 비의존)
 // ===================================================
-function extractCells(html) {
-  const parser = new DOMParser();
-  const doc = parser.parseFromString(html, 'text/html');
-  const body = doc.getElementById('BodyContent') || doc.body;
-  const cells = body.querySelectorAll('td');
-  return Array.from(cells).map((td, i) => ({
-    index: i,
-    id: td.id || '',
-    cls: td.className || '',
-    isField: td.className.includes('FIELD'),
-    html: td.innerHTML,
-    text: td.innerText.replace(/\s+/g, ' ').trim()
-  }));
+
+// HTML에서 텍스트 노드를 추출 (태그 경계마다 분리, 원본 위치 인덱스 보존)
+function extractTextNodes(html) {
+  const bodyIdx = html.indexOf('id="BodyContent"');
+  const startIdx = bodyIdx >= 0 ? html.lastIndexOf('<div', bodyIdx) : 0;
+  const scope = startIdx >= 0 ? html.slice(startIdx) : html;
+  const offset = startIdx >= 0 ? startIdx : 0;
+
+  // rawStart/rawEnd는 항상 "원본(치환 전) HTML 문자열" 기준 위치.
+  // text는 비교/표시용으로 &nbsp;를 공백으로 바꾼 값이지만, 길이는 원본과 동일하게 유지
+  // (&nbsp;를 1글자 placeholder로 보지 않고, 공백류 전체를 trim 대상으로만 사용하고
+  //  core 구간은 원본 그대로 슬라이스하기 때문에 위치가 절대 어긋나지 않음)
+  function trimWithOffset(rawChunk, chunkStart) {
+    const leadMatch = rawChunk.match(/^(?:\s|&nbsp;)+/);
+    const leadLen = leadMatch ? leadMatch[0].length : 0;
+    const trailMatch = rawChunk.match(/(?:\s|&nbsp;)+$/);
+    const trailLen = trailMatch ? trailMatch[0].length : 0;
+
+    const coreRaw = rawChunk.slice(leadLen, rawChunk.length - trailLen);
+    if (!coreRaw) return null;
+
+    return {
+      text: coreRaw.replace(/&nbsp;/g, ' '),   // 비교/표시용 (원본 raw는 별도 보관 안 해도 chip 치환 시 rawStart/rawEnd로 직접 슬라이스)
+      rawStart: chunkStart + leadLen,
+      rawEnd: chunkStart + leadLen + coreRaw.length
+    };
+  }
+
+  const nodes = [];
+  const tagRe = /<[^>]+>/g;
+  let lastEnd = 0;
+  let m;
+  while ((m = tagRe.exec(scope)) !== null) {
+    const textChunk = scope.slice(lastEnd, m.index);
+    const node = trimWithOffset(textChunk, offset + lastEnd);
+    if (node) nodes.push(node);
+    lastEnd = m.index + m[0].length;
+  }
+  const tailChunk = scope.slice(lastEnd);
+  const tailNode = trimWithOffset(tailChunk, offset + lastEnd);
+  if (tailNode) nodes.push(tailNode);
+
+  return nodes;
 }
 
-function diffCells(cellsA, cellsB) {
-  const diffs = [];
-  const len = Math.min(cellsA.length, cellsB.length);
+// LCS 기반 시퀀스 diff (Myers 알고리즘 단순화 버전)
+function diffTextNodes(nodesA, nodesB) {
+  const a = nodesA.map(n => n.text);
+  const b = nodesB.map(n => n.text);
+  const n = a.length, m = b.length;
+
+  // DP LCS 테이블 (n,m이 너무 크면 메모리 보호)
+  if (n * m > 4_000_000) {
+    // 너무 크면 단순 포지션 비교로 폴백
+    return fallbackPositionDiff(nodesA, nodesB);
+  }
+
+  const dp = new Array(n + 1);
+  for (let i = 0; i <= n; i++) dp[i] = new Uint16Array(m + 1);
+  for (let i = 1; i <= n; i++) {
+    for (let j = 1; j <= m; j++) {
+      dp[i][j] = a[i-1] === b[j-1] ? dp[i-1][j-1] + 1 : Math.max(dp[i-1][j], dp[i][j-1]);
+    }
+  }
+
+  const ops = [];
+  let i = n, j = m;
+  while (i > 0 || j > 0) {
+    if (i > 0 && j > 0 && a[i-1] === b[j-1]) {
+      ops.push({ type: 'equal', nodeB: nodesB[j-1] });
+      i--; j--;
+    } else if (j > 0 && (i === 0 || dp[i][j-1] >= dp[i-1][j])) {
+      ops.push({ type: 'insert', nodeB: nodesB[j-1] });
+      j--;
+    } else {
+      ops.push({ type: 'delete', nodeA: nodesA[i-1] });
+      i--;
+    }
+  }
+  ops.reverse();
+
+  // delete+insert 연속 블록을 replace로 병합
+  const merged = [];
+  let k = 0;
+  while (k < ops.length) {
+    if (ops[k].type === 'equal') { k++; continue; }
+    const block = [];
+    while (k < ops.length && ops[k].type !== 'equal') { block.push(ops[k]); k++; }
+    const dels = block.filter(o => o.type === 'delete').map(o => o.nodeA);
+    const inss = block.filter(o => o.type === 'insert').map(o => o.nodeB);
+    if (inss.length) {
+      merged.push({ textsBefore: dels.map(d => d.text), nodesAfter: inss });
+    }
+  }
+  return merged;
+}
+
+function fallbackPositionDiff(nodesA, nodesB) {
+  const merged = [];
+  const len = Math.min(nodesA.length, nodesB.length);
   for (let i = 0; i < len; i++) {
-    const a = cellsA[i], b = cellsB[i];
-    if (a.text !== b.text) {
-      diffs.push({ cellIndex: i, id: b.id, cls: b.cls,
-                   isField: b.isField, textA: a.text, textB: b.text,
-                   htmlA: a.html, htmlB: b.html });
+    if (nodesA[i].text !== nodesB[i].text) {
+      merged.push({ textsBefore: [nodesA[i].text], nodesAfter: [nodesB[i]] });
     }
   }
-  return diffs;
+  return merged;
 }
 
-// FIELD ID → 건너뛸 목록 (헤더/결재란)
-const SKIP_IDS = new Set([
-  'docnumber','lastdraftdate','telephone','keepperiod','department',
-  'securitylevel','jikwe1','jikwe2','jikwe3','jikwe4','jikwe5',
-  'sign1','sign2','sign3','sign4','sign5',
-  'habyui1','habyui2','habyui3','habyui4','habyui5',
-  'habyuipositon1','habyuipositon2','habyuipositon3','habyuipositon4','habyuipositon5',
-  'habyuisign1','habyuisign2','habyuisign3','habyuisign4','habyuisign5',
-  'draftername','receiptdate','views','recvdocnumber',
-  'seumyungdate1','seumyungdate2','seumyungdate3','seumyungdate4','seumyungdate5',
-  '1jikwe1','1jikwe2','1jikwe3','1jikwe4','1jikwe5',
-  '1sign1','1sign2','1sign3','1sign4','1sign5',
-  '1seumyungdate1','1seumyungdate2','1seumyungdate3','1seumyungdate4','1seumyungdate5',
-  '2jikwe1','2jikwe2','2jikwe3','2jikwe4','2jikwe5',
-  '2sign1','2sign2','2sign3','2sign4','2sign5',
-  '2seumyungdate1','2seumyungdate2','2seumyungdate3','2seumyungdate4','2seumyungdate5',
-]);
+// 헤더/결재란류 노이즈 텍스트 패턴 (AI에게 보내기 전 필터링)
+const NOISE_PATTERNS = [
+  /^AICC[가-힣\d-]+$/,           // 문서번호
+  /^\d{4}\.\d{2}\.\d{2}$/,         // lastdraftdate 형식
+  /^\d{2}\.\d{2}$/,                 // 결재 날짜 (05.28)
+  /^01\d{8,9}$/,                     // 전화번호
+  /^\d+년$/,                          // 보존기간
+  /^\d등급$/,                         // 보안등급
+  /^[가-힣]{2,4}$/                  // 이름 2~4자 (성호, 류기남 등) - 단독일 때만
+];
 
-function autoGenKey(cell, cellsB, idx) {
-  if (cell.id && cell.id !== '00000000000009072102' && !/^\d+$/.test(cell.id)) {
-    return camelToKorKey(cell.id);
-  }
-  // 앞 셀 텍스트로 키 추론
-  const prev = cellsB[idx - 1];
-  if (prev) {
-    const t = prev.text.replace(/[:\s]/g,'');
-    if (t.length > 0 && t.length < 15) return t;
-  }
-  return `변수${idx}`;
-}
-
-function camelToKorKey(id) {
-  const map = {
-    'doctitle':'제목', 'body':'본문', 'recipient':'수신',
-    'recipients':'수신처', 'telephone':'전화번호',
-  };
-  return map[id] || id;
-}
-
-function inferType(textA, textB) {
-  // 금액 패턴
-  if (/^[\d,]+$/.test(textB.replace(/\s/g,''))) return 'amount';
-  // 날짜 패턴
-  if (/\d{1,4}[.년]\s*\d{1,2}[.월]/.test(textB)) return 'text';
-  // 숫자만
-  if (/^\d+$/.test(textB)) return 'amount';
-  return 'text';
-}
-
-function buildVars(diffs, cellsB) {
-  const vars = [];
-  const seen = new Set();
-
-  for (const diff of diffs) {
-    // 건너뛸 FIELD
-    if (SKIP_IDS.has(diff.id)) continue;
-
-    // body FIELD는 본문 블록 - 내부 파싱
-    if (diff.id === 'body') {
-      const bodyVars = parseBodyDiff(diff.textA, diff.textB);
-      for (const v of bodyVars) {
-        if (!seen.has(v.key)) { seen.add(v.key); vars.push(v); }
-      }
-      continue;
-    }
-
-    const key = autoGenKey(diff, cellsB, diff.cellIndex);
-    if (seen.has(key)) continue;
-    seen.add(key);
-
-    const type = inferType(diff.textA, diff.textB);
-    vars.push({
-      key, type,
-      example: diff.textB,
-      formula: '',
-      cellIndex: diff.cellIndex,
-      id: diff.id
-    });
-  }
-
-  // calc 변수 자동 추론
-  autoInferCalc(vars);
-  return vars;
-}
-
-function parseBodyDiff(textA, textB) {
-  // 본문 텍스트에서 날짜/기간/월 변경 감지
-  const vars = [];
-  
-  // 월 패턴: "4월" → "5월" or "26년4월" → "26년5월"
-  const monthMatch = textB.match(/(\d{2}년)?(\d{1,2})월/g);
-  if (monthMatch) {
-    vars.push({ key: '보고월', type: 'text', example: monthMatch[0],
-                formula: '', cellIndex: -1, id: 'body_month' });
-  }
-  
-  // 기간 패턴: "2026. 3. 20. ~ 2026. 4. 19."
-  const periodMatch = textB.match(/\d{4}\.\s*\d{1,2}\.\s*\d{1,2}\.?\s*~\s*\d{4}\.\s*\d{1,2}\.\s*\d{1,2}/);
-  if (periodMatch) {
-    vars.push({ key: '청구기간', type: 'text', example: periodMatch[0],
-                formula: '', cellIndex: -1, id: 'body_period' });
-  }
-
-  return vars;
-}
-
-function autoInferCalc(vars) {
-  // 금액 변수들 중 합계 패턴 감지
-  const amountVars = vars.filter(v => v.type === 'amount');
-  
-  for (const v of vars) {
-    if (v.type !== 'amount') continue;
-    
-    // 부가세 패턴: 다른 금액의 10%
-    const exNum = parseFloat((v.example||'').replace(/,/g,''));
-    for (const other of amountVars) {
-      if (other.key === v.key) continue;
-      const otherNum = parseFloat((other.example||'').replace(/,/g,''));
-      if (otherNum > 0 && Math.abs(exNum / otherNum - 0.1) < 0.01) {
-        v.type = 'calc';
-        v.formula = `${other.key} × 0.1`;
-        break;
-      }
-      // 합계 패턴
-      if (amountVars.length >= 2) {
-        // 두 변수 합인지 확인은 더 복잡하므로 일단 생략
-      }
-    }
-  }
+function isLikelyNoise(text) {
+  // 너무 짧은 단순 한글 이름류는 일단 후보에서 제외하지 않고 AI 판단에 맡김
+  return /^AICC[가-힣\d-]+$/.test(text) || /^\d{4}\.\d{2}\.\d{2}$/.test(text) || /^01\d{8,9}$/.test(text);
 }
 
 // ===================================================
 // HTML RENDERER (변수 하이라이트 포함)
 // ===================================================
-// HTML에 변수 chip 인젝션 후 완성된 HTML 문자열 반환
-function injectVarChips(html, vars) {
+// HTML 문자열에 변수 chip을 위치 기반으로 정밀 삽입
+// (matchText 단순 indexOf 대신 rawStart/rawEnd 위치를 사용해 중복 텍스트 오매칭 방지)
+// ===================================================
+function makeChipHtml(key, type) {
+  const isCalc = type === 'calc';
+  const style = isCalc
+    ? 'display:inline-block;background:#FEF9C3;color:#92400E;border-radius:3px;padding:1px 6px;font-weight:700;font-size:9pt;border:1px solid #FCD34D;white-space:nowrap;'
+    : 'display:inline-block;background:#DBEAFE;color:#1d4ed8;border-radius:3px;padding:1px 6px;font-weight:700;font-size:9pt;border:1px solid #93C5FD;white-space:nowrap;';
+  return `<span style="${style}">{{${key}}}</span>`;
+}
+
+function escapeRegExp(s) {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function escapeHtml(s) {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+// 변수에 rawStart/rawEnd가 있으면 정확한 위치에, 없으면 matchText로 폴백 검색.
+// occurrences가 있으면(같은 key가 여러 위치에 반복) 모든 위치에 chip을 적용한다.
+// 여러 위치를 한 번에 적용할 때는 뒤에서 앞으로(역순) 치환해야
+// 앞쪽 치환이 뒤쪽 인덱스를 밀어내는 문제가 생기지 않는다.
+function injectVarChipsIntoHtml(html, vars) {
   if (!html) return html;
 
-  const parser = new DOMParser();
-  const doc = parser.parseFromString(html, 'text/html');
-  const bodyContent = doc.getElementById('BodyContent') || doc.body;
-  if (!bodyContent) return html;
+  const normalize = s => s.replace(/&nbsp;/g, ' ');
 
-  // FIELD 헤더/결재란 흐리게
-  SKIP_IDS.forEach(id => {
-    try {
-      const el = bodyContent.querySelector(`[id="${id}"]`);
-      if (el) el.style.opacity = '0.3';
-    } catch(e) {}
-  });
-
-  // 변수 셀 chip 치환
-  const allCells = bodyContent.querySelectorAll('td');
+  // 각 변수의 occurrences(또는 단일 rawStart/rawEnd)를 모두 펼쳐서 하나의 치환 목록으로 만든다
+  const allOccurrences = [];
   for (const v of vars) {
-    if (v.cellIndex < 0) continue;
-    if (v.cellIndex < allCells.length) {
-      const td = allCells[v.cellIndex];
-      const isCalc = v.type === 'calc';
-      const chipStyle = isCalc
-        ? 'display:inline-block;background:#FEF9C3;color:#92400E;border-radius:3px;padding:2px 6px;font-weight:700;font-size:9pt;border:1px solid #FCD34D;white-space:nowrap;'
-        : 'display:inline-block;background:#DBEAFE;color:#1d4ed8;border-radius:3px;padding:2px 6px;font-weight:700;font-size:9pt;border:1px solid #93C5FD;white-space:nowrap;';
-      td.innerHTML = `<span style="${chipStyle}">{{${v.key}}}</span>`;
+    const occs = (v.occurrences && v.occurrences.length) ? v.occurrences : [{ matchText: v.matchText, rawStart: v.rawStart, rawEnd: v.rawEnd }];
+    for (const occ of occs) {
+      if (occ.matchText && typeof occ.rawStart === 'number' && typeof occ.rawEnd === 'number') {
+        allOccurrences.push({ key: v.key, type: v.type, matchText: occ.matchText, rawStart: occ.rawStart, rawEnd: occ.rawEnd });
+      }
+    }
+  }
+  const withoutPos = vars.filter(v => v.matchText && !(typeof v.rawStart === 'number' && typeof v.rawEnd === 'number') && !(v.occurrences && v.occurrences.length));
+
+  let result = html;
+
+  if (allOccurrences.length) {
+    // 위치가 뒤쪽인 것부터 치환 (앞쪽 인덱스 보존)
+    const sortedByPos = [...allOccurrences].sort((a, b) => b.rawStart - a.rawStart);
+    for (const occ of sortedByPos) {
+      // 안전장치: 해당 위치의 raw 텍스트를 정규화했을 때 matchText와 일치하는지 확인
+      const rawSlice = result.slice(occ.rawStart, occ.rawEnd);
+      if (normalize(rawSlice) !== occ.matchText) continue; // 위치가 어긋났으면 건너뜀 (오삽입 방지)
+      const chip = makeChipHtml(occ.key, occ.type);
+      result = result.slice(0, occ.rawStart) + chip + result.slice(occ.rawEnd);
     }
   }
 
-  // 전체 HTML 반환 (head 포함 → iframe srcdoc에 그대로 사용)
+  if (withoutPos.length) {
+    // 위치 정보 없는 변수(수동 추가 등): 기존 방식(긴 텍스트 우선) 폴백
+    const sorted = [...withoutPos].sort((a, b) => b.matchText.length - a.matchText.length);
+    for (const v of sorted) {
+      const idx = result.indexOf(v.matchText);
+      if (idx === -1) continue;
+      const chip = makeChipHtml(v.key, v.type);
+      result = result.slice(0, idx) + chip + result.slice(idx + v.matchText.length);
+    }
+  }
+
+  return result;
+}
+
+// 헤더/결재란 영역 흐리게 처리 (FIELD id 기준)
+const SKIP_IDS = new Set([
+  'docnumber','lastdraftdate','telephone','keepperiod','department',
+  'securitylevel','draftername','receiptdate','views','recvdocnumber',
+]);
+const SKIP_ID_PATTERNS = [/^jikwe\d/, /^sign\d/, /^habyui/, /^seumyungdate\d/, /^\dj?ikwe\d/, /^\dsign\d/, /^\dseumyungdate\d/];
+
+function dimHeaderFields(html) {
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(html, 'text/html');
+  const root = doc.getElementById('BodyContent') || doc.body;
+  if (!root) return html;
+  const fields = root.querySelectorAll('[class*="FIELD"]');
+  fields.forEach(el => {
+    const id = el.id || '';
+    if (SKIP_IDS.has(id) || SKIP_ID_PATTERNS.some(p => p.test(id))) {
+      el.style.opacity = '0.3';
+    }
+  });
   return doc.documentElement.outerHTML;
 }
 
-// iframe으로 렌더 — MHT 원본 스타일 100% 보존
+// iframe으로 렌더 — MHT 원본 스타일 100% 보존 (matchText 자리에 chip 주입)
 function renderPreview(containerId, html, vars) {
   const container = document.getElementById(containerId);
   if (!container) return;
 
-  const injected = injectVarChips(html, vars || []);
+  let injected = injectVarChipsIntoHtml(html, vars || []);
+  injected = dimHeaderFields(injected);
 
-  // 기존 iframe 재사용 or 새로 생성
   let iframe = container.querySelector('iframe.doc-iframe');
   if (!iframe) {
     iframe = document.createElement('iframe');
@@ -1129,8 +1147,6 @@ function renderPreview(containerId, html, vars) {
   }
 
   iframe.srcdoc = injected;
-
-  // iframe 높이 자동 조절
   iframe.onload = () => {
     try {
       const h = iframe.contentDocument.body.scrollHeight;
@@ -1142,25 +1158,21 @@ function renderPreview(containerId, html, vars) {
   iframe.style.height = '600px';
 }
 
-// 작성 시: 변수 값 치환 후 iframe 렌더
+// 저장된 템플릿(이미 {{key}} chip이 박혀있는 HTML) 안에서
+// chip 전체(<span ...>{{key}}</span>)를 사용자 입력값으로 치환
+// chip 텍스트는 makeChipHtml로 생성된 고유한 패턴이므로 정확히 매칭됨
 function renderWithValues(containerId, html, vars, values) {
-  const parser = new DOMParser();
-  const doc = parser.parseFromString(html, 'text/html');
-  const bodyContent = doc.getElementById('BodyContent') || doc.body;
-  if (!bodyContent) return;
+  let result = html;
 
-  const allCells = bodyContent.querySelectorAll('td');
   for (const v of vars) {
-    if (v.cellIndex < 0) continue;
-    if (v.cellIndex < allCells.length) {
-      const td = allCells[v.cellIndex];
-      const val = values[v.key];
-      if (val !== undefined && val !== '') {
-        td.innerHTML = `<span style="color:#2563EB;font-weight:600;">${val}</span>`;
-      } else {
-        td.innerHTML = `<span style="opacity:.4;font-style:italic;">{{${v.key}}}</span>`;
-      }
-    }
+    const chipBlue = makeChipHtml(v.key, 'text');
+    const chipAmber = makeChipHtml(v.key, 'calc');
+    const val = values[v.key];
+    const replacement = (val !== undefined && val !== '')
+      ? `<span style="color:#2563EB;font-weight:600;">${escapeHtml(String(val))}</span>`
+      : `<span style="opacity:.45;font-style:italic;">{{${v.key}}}</span>`;
+    result = result.split(chipBlue).join(replacement);
+    result = result.split(chipAmber).join(replacement);
   }
 
   const container = document.getElementById(containerId);
@@ -1174,7 +1186,7 @@ function renderWithValues(containerId, html, vars, values) {
     container.innerHTML = '';
     container.appendChild(iframe);
   }
-  iframe.srcdoc = doc.documentElement.outerHTML;
+  iframe.srcdoc = result;
   iframe.onload = () => {
     try {
       const h = iframe.contentDocument.body.scrollHeight;
@@ -1237,17 +1249,28 @@ async function runAnalyze() {
     // MHT 파싱
     state.htmlA = await parseMht(state.fileA);
     state.htmlB = await parseMht(state.fileB);
-
-    // 셀 diff
-    const cellsA = extractCells(state.htmlA);
-    const cellsB = extractCells(state.htmlB);
-    state.diffCells = diffCells(cellsA, cellsB);
-
-    // 변수 생성
-    state.vars = buildVars(state.diffCells, cellsB);
     state.templateHtml = state.htmlB;
 
-    // Step2로 이동
+    // 텍스트 노드 단위 diff (DOM 인덱스 비의존)
+    const nodesA = extractTextNodes(state.htmlA);
+    const nodesB = extractTextNodes(state.htmlB);
+    const rawDiffs = diffTextNodes(nodesA, nodesB);
+
+    // 노이즈(문서번호/전화번호/날짜코드) 제거
+    const cleanDiffs = rawDiffs.filter(d => {
+      const newTexts = d.nodesAfter.map(n => n.text);
+      return !newTexts.every(t => isLikelyNoise(t));
+    }).filter(d => !d.nodesAfter.every(n => isLikelyNoise(n.text)));
+
+    if (cleanDiffs.length === 0) {
+      throw new Error('두 파일 사이에 변경된 내용을 찾지 못했습니다.');
+    }
+
+    btn.innerHTML = '<span class="spinner"></span> AI가 변수명 부여 중...';
+
+    // AI에게 diff 목록을 보내 변수명/타입/수식 부여 요청
+    state.vars = await aiAssignVarNames(cleanDiffs, nodesB);
+
     showStep2();
   } catch (err) {
     toast('분석 실패: ' + err.message, 'error');
@@ -1256,21 +1279,127 @@ async function runAnalyze() {
   }
 }
 
+// AI에게 diff 목록 전달 → {key, type, formula} + diffIdx/afterIdx/subText로 위치를 정밀 매핑
+async function aiAssignVarNames(diffs, nodesB) {
+  // diff 항목별로 AI가 보기 쉽게 idx, before, after 텍스트만 전달
+  const items = diffs.map((d, i) => {
+    const newTexts = d.nodesAfter.map(n => n.text);
+    return { diffIdx: i, before: d.textsBefore, after: newTexts };
+  });
+
+  const prompt = `당신은 한국 회사 공문 양식에서 "매월 바뀌는 값"을 찾아 변수명을 붙이는 어시스턴트입니다.
+아래는 이전 달 문서와 최신 달 문서를 비교했을 때 달라진 텍스트 조각 목록입니다 (diffIdx 순서대로).
+각 항목에 대해 적절한 한글 변수명(key), 타입(text/amount/calc), calc인 경우 수식(formula)을 부여해주세요.
+
+중요: "after" 배열의 각 텍스트는 한 문단/제목 전체일 수 있습니다 (예: "LG전자 AS센터 위탁수수료 청구(26년5월)").
+그 안에서 실제로 매달 바뀌는 부분만 정확히 골라 subText로 지정하세요 (예: "26년5월"). subText는 after 텍스트 안에 정확히 그대로 포함된 부분 문자열이어야 합니다.
+
+규칙:
+- key는 한글로, 간결하게 (예: 청구연월, 청구기간, LG공급가액, 부가세합계)
+- 같은 의미의 값이 여러 diffIdx에 반복되면 같은 key를 사용하세요
+- 금액(숫자+쉼표)이면 type은 amount
+- 날짜/기간/월 표시면 type은 text
+- 금액이 다른 금액의 합/차/10%(부가세)로 계산되면 type은 calc, formula는 "키1 + 키2" 또는 "키1 × 0.1" 형식
+- 의미 없는 변경(사람 이름, 결재 도장, 단순 공백)이면 결과에서 제외
+- 각 항목의 "after" 배열에서 실제로 변수화할 텍스트의 배열 인덱스를 afterIdx로 지정하세요 (0부터 시작)
+- subText는 변수화할 정확한 부분 문자열입니다. after 텍스트 전체를 변수화하려면 after 텍스트 그대로 subText에 넣으세요
+
+[변경 항목 목록]
+${JSON.stringify(items, null, 1)}
+
+아래 JSON 배열 형식으로만 응답하세요. 다른 설명 없이 JSON만 출력하세요:
+[{"diffIdx":0,"afterIdx":0,"subText":"26년5월","key":"청구연월","type":"text","formula":""}, ...]`;
+
+  const resp = await fetch(`${API_BASE}/claude`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 4000,
+      messages: [{ role: 'user', content: prompt }]
+    })
+  });
+
+  if (!resp.ok) throw new Error(`AI 분석 요청 실패 (${resp.status})`);
+  const data = await resp.json();
+  let text = data.content?.[0]?.text || '[]';
+
+  text = text.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
+  const jsonMatch = text.match(/\[[\s\S]*\]/);
+  if (!jsonMatch) throw new Error('AI 응답에서 변수 목록을 찾지 못했습니다.');
+
+  let parsed;
+  try {
+    parsed = JSON.parse(jsonMatch[0]);
+  } catch (e) {
+    throw new Error('AI 응답 JSON 파싱 실패: ' + e.message);
+  }
+
+  // diffIdx/afterIdx로 노드를 찾고, 그 노드의 rawStart/rawEnd(검색 범위) 안에서
+  // subText의 정확한 위치를 다시 계산한다. 이렇게 하면 노드 텍스트가 길어도
+  // (예: 제목 문장 전체) 그 안의 변경 부분만 정밀하게 변수화할 수 있다.
+  // 같은 key가 여러 위치에 반복 등장하면 모든 위치에 chip을 적용한다.
+  const byKey = new Map(); // key -> { key, type, formula, occurrences: [{matchText, rawStart, rawEnd}] }
+
+  for (const item of parsed) {
+    if (!item.key) continue;
+    const diff = diffs[item.diffIdx];
+    if (!diff) continue;
+    const node = diff.nodesAfter[item.afterIdx];
+    if (!node) continue;
+
+    const subText = item.subText || node.text;
+    const offsetInNode = node.text.indexOf(subText);
+    if (offsetInNode === -1) continue; // AI가 준 subText가 노드 텍스트에 실제로 없으면 신뢰할 수 없으니 건너뜀
+
+    const preciseStart = node.rawStart + offsetInNode;
+    const preciseEnd = preciseStart + subText.length;
+
+    if (!byKey.has(item.key)) {
+      byKey.set(item.key, {
+        key: item.key,
+        type: item.type || 'text',
+        formula: item.formula || '',
+        occurrences: []
+      });
+    }
+    byKey.get(item.key).occurrences.push({
+      matchText: subText,
+      rawStart: preciseStart,
+      rawEnd: preciseEnd
+    });
+  }
+
+  // 화면/저장용 변수 객체: 대표 occurrence(첫 번째)를 matchText/rawStart/rawEnd로 노출하되,
+  // occurrences 전체를 함께 보관해 chip 주입 시 모든 위치를 처리할 수 있게 한다.
+  const results = [];
+  for (const v of byKey.values()) {
+    const first = v.occurrences[0];
+    results.push({
+      key: v.key,
+      type: v.type,
+      formula: v.formula,
+      matchText: first.matchText,
+      example: first.matchText,
+      rawStart: first.rawStart,
+      rawEnd: first.rawEnd,
+      occurrences: v.occurrences
+    });
+  }
+
+  return results;
+}
+
 function showStep2() {
   document.getElementById('step1-content').style.display = 'none';
   document.getElementById('step2-content').style.display = 'block';
   setStepActive(2);
 
-  // 배너 업데이트
-  const changeCount = state.diffCells.filter(d => !SKIP_IDS.has(d.id)).length;
   const varCount = state.vars.length;
   document.getElementById('diff-banner-text').textContent =
-    `같은 양식 감지됨 — ${changeCount}개 변경 항목 자동 인식 · ${varCount}개 변수 생성됨`;
+    `같은 양식 감지됨 — AI가 ${varCount}개 변수를 자동 추출했어요`;
 
-  // 미리보기 렌더
   renderPreview('doc-render', state.templateHtml, state.vars);
-
-  // 변수 목록 렌더
   renderVarsList();
 }
 
@@ -1311,7 +1440,7 @@ function renderVarRow(v, idx) {
         <button class="var-del-btn" onclick="deleteVar(${idx})">×</button>
       </div>
       ${v.type === 'calc' ? `<input class="var-formula-input" value="${v.formula}" placeholder="수식: 공급가액 × 0.1" onchange="updateVar(${idx},'formula',this.value)">` : ''}
-      <input class="var-example-input" value="${v.example||''}" placeholder="예시값 (예: 26년5월)" onchange="updateVar(${idx},'example',this.value)">
+      <div style="font-size:11px;color:var(--text-muted);margin-top:3px;">원본 텍스트: <span style="color:#1d4ed8;font-weight:600;">${(v.matchText||'').slice(0,40)}</span></div>
     </div>
   </div>`;
 }
@@ -1331,7 +1460,7 @@ function deleteVar(idx) {
 }
 
 function addVar() {
-  state.vars.push({ key: '새변수', type: 'text', example: '', formula: '', cellIndex: -1, id: '' });
+  state.vars.push({ key: '새변수', type: 'text', example: '', formula: '', matchText: '' });
   renderVarsList();
 }
 
@@ -1384,15 +1513,16 @@ async function runAiFormat() {
   btn.innerHTML = '<span class="spinner"></span> AI 교정 중...';
 
   try {
-    // body FIELD 내용 추출
+    // chip이 주입된 최신 HTML 기준으로 본문 텍스트 추출
+    const injectedHtml = injectVarChipsIntoHtml(state.templateHtml, state.vars);
     const parser = new DOMParser();
-    const doc = parser.parseFromString(state.templateHtml, 'text/html');
+    const doc = parser.parseFromString(injectedHtml, 'text/html');
     const bodyField = doc.getElementById('bodyblock') || doc.getElementById('body');
     if (!bodyField) throw new Error('본문 블록을 찾을 수 없습니다');
 
     let bodyText = bodyField.innerText || bodyField.textContent;
-    
-    // 변수 키를 토큰으로 보호
+
+    // 변수 키({{key}})를 토큰으로 보호
     const tokenMap = {};
     state.vars.forEach((v, i) => {
       const token = `__VAR${i}__`;
@@ -1422,6 +1552,7 @@ ${bodyText}
       })
     });
 
+    if (!resp.ok) throw new Error(`API 요청 실패 (${resp.status})`);
     const data = await resp.json();
     let corrected = data.content?.[0]?.text || bodyText;
 
@@ -1453,11 +1584,17 @@ async function saveFinalTemplate() {
   const name = document.getElementById('tpl-name').value.trim();
   if (!name) { toast('양식 이름을 입력하세요', 'error'); return; }
 
+  // state.aiCorrectedHtml은 runAiFormat에서 이미 chip이 박힌 상태로 생성됨.
+  // state.templateHtml(AI 교정을 안 거친 원본)은 아직 chip이 없으므로 여기서 주입해야 함.
+  const finalHtmlWithChips = state.aiCorrectedHtml
+    ? state.aiCorrectedHtml
+    : injectVarChipsIntoHtml(state.templateHtml, state.vars);
+
   const tpl = {
     name,
     icon: selectedIcon,
     vars: state.vars,
-    html: state.aiCorrectedHtml || state.templateHtml,
+    html: finalHtmlWithChips,
     created_at: new Date().toISOString(),
     use_count: 0
   };
@@ -1651,7 +1788,7 @@ async function runWriteAi() {
     for (const v of vars) {
       const val = state.writeValues[v.key];
       if (val !== undefined) {
-        bodyText = bodyText.replace(new RegExp(`\\{\\{${v.key}\\}\\}`, 'g'), val);
+        bodyText = bodyText.replace(new RegExp(`\\{\\{${escapeRegExp(v.key)}\\}\\}`, 'g'), val);
       }
     }
 
@@ -1677,11 +1814,17 @@ ${bodyText}
     const data = await resp.json();
     const corrected = data.content?.[0]?.text || '';
 
-    // 결과 표시
-    document.getElementById('write-render').innerHTML += `
+    // 결과 표시 — iframe 컨테이너(write-render)를 건드리지 않고 별도 영역에 출력
+    let resultBox = document.getElementById('write-ai-result');
+    if (!resultBox) {
+      resultBox = document.createElement('div');
+      resultBox.id = 'write-ai-result';
+      document.getElementById('write-render').insertAdjacentElement('afterend', resultBox);
+    }
+    resultBox.innerHTML = `
       <div class="ai-result-box">
         <div class="ai-label">✨ AI 서식 교정 결과</div>
-        <pre style="white-space:pre-wrap;font-family:inherit;">${corrected}</pre>
+        <pre style="white-space:pre-wrap;font-family:inherit;">${escapeHtml(corrected)}</pre>
       </div>`;
     document.getElementById('write-status').textContent = 'AI 교정 완료';
     document.getElementById('write-status').className = 'result-status done';
@@ -1701,11 +1844,16 @@ function downloadMht() {
   const tpl = state.currentTpl;
   if (!tpl || !tpl.html) { toast('템플릿 HTML이 없습니다', 'error'); return; }
 
-  // 변수 치환
+  // chip 전체(<span style=...>{{key}}</span>)를 값으로 치환해야
+  // 다운로드된 문서에 파란/노란 chip 스타일이 남지 않는다.
   let finalHtml = tpl.html;
-  for (const v of (tpl.vars||[])) {
-    const val = state.writeValues[v.key] || `{{${v.key}}}`;
-    finalHtml = finalHtml.replace(new RegExp(`\\{\\{${v.key}\\}\\}`, 'g'), val);
+  for (const v of (tpl.vars || [])) {
+    const val = state.writeValues[v.key];
+    const plainVal = (val !== undefined && val !== '') ? String(val) : `{{${v.key}}}`; // 미입력 시 키 그대로 남김(사용자가 알아채도록)
+    const chipBlue = makeChipHtml(v.key, 'text');
+    const chipAmber = makeChipHtml(v.key, 'calc');
+    finalHtml = finalHtml.split(chipBlue).join(escapeHtml(plainVal));
+    finalHtml = finalHtml.split(chipAmber).join(escapeHtml(plainVal));
   }
 
   // MHT 래핑
@@ -1809,7 +1957,7 @@ function goPage(page) {
 function resetNew() {
   state.fileA = null; state.fileB = null;
   state.htmlA = null; state.htmlB = null;
-  state.diffCells = []; state.vars = [];
+  state.vars = [];
   state.templateHtml = null; state.aiCorrectedHtml = null;
 
   document.getElementById('step1-content').style.display = 'block';
