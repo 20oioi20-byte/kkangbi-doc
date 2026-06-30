@@ -728,7 +728,7 @@ a { text-decoration: none; color: inherit; }
         <div class="vars-panel">
           <div class="vars-panel-header">
             <div class="vars-panel-title">자동 생성된 변수 목록</div>
-            <div class="vars-panel-sub">키 이름 수정 · 타입 변경 · 삭제 가능</div>
+            <div class="vars-panel-sub">키 이름 수정 · 타입 변경 · 삭제 가능 · 왼쪽 문서의 흐린 점선 텍스트를 클릭하면 변수 추가</div>
           </div>
           <div class="vars-list" id="vars-list">
             <!-- 그룹: 매월 입력 -->
@@ -750,7 +750,7 @@ a { text-decoration: none; color: inherit; }
               <button class="btn-ai-calc-add" id="btn-ai-calc-add" onclick="runAiCalcAdd()">AI로 분석해서 추가</button>
             </div>
             <!-- 추가 버튼 -->
-            <button class="add-var-btn" onclick="addVar()">＋ 변수 직접 추가</button>
+            <button class="add-var-btn" onclick="addVar()">＋ 빈 변수 추가 (본문과 무관한 계산용)</button>
           </div>
           <div class="vars-actions">
             <button class="btn-save-tpl" onclick="goStep3()">다음 단계 — 서식 교정 →</button>
@@ -1164,19 +1164,19 @@ function dimHeaderFields(html) {
 }
 
 // ===================================================
-// STEP2 전용: 드래그로 변수 추가하기 위한 위치 마커 삽입
+// STEP2 전용: 클릭으로 변수 추가하기 위한 위치 마커 삽입
 // (기존 renderPreview/injectVarChipsIntoHtml은 건드리지 않고,
 //  Step2 화면에서만 쓰는 별도 렌더 경로로 분리)
 // ===================================================
 
 // Step2 전용: 원본 HTML(state.templateHtml, chip 없는 순수 원본)을 기준으로
-// (1) 변수 chip 치환 위치와 (2) 드래그 가능 마커로 감쌀 위치를 모두 "원본 좌표계"에서 모아
+// (1) 변수 chip 치환 위치와 (2) 클릭 가능 마커로 감쌀 위치를 모두 "원본 좌표계"에서 모아
 // 하나의 치환 목록으로 합친 뒤, 뒤에서부터 한 번에 적용한다.
 //
 // ⚠️ 반드시 원본 HTML 기준으로만 좌표를 계산해야 한다. chip을 먼저 주입한 뒤
 // 그 결과물에서 마커 좌표를 다시 뽑으면, chip 삽입으로 HTML 길이가 변하면서
 // 이후 텍스트의 위치가 전부 밀려 원본 좌표계와 어긋나는 버그가 생긴다.
-function injectChipsAndDraggableMarkers(html, vars) {
+function injectChipsAndClickableMarkers(html, vars) {
   const normalize = s => s.replace(/&nbsp;/g, ' ');
 
   // 1) chip으로 치환할 위치 목록 (원본 좌표 기준)
@@ -1192,7 +1192,7 @@ function injectChipsAndDraggableMarkers(html, vars) {
     }
   }
 
-  // 2) 드래그 마커로 감쌀 위치 목록 (chip이 차지한 범위와 겹치지 않는 텍스트 노드만, 원본 좌표 기준)
+  // 2) 클릭 마커로 감쌀 위치 목록 (chip이 차지한 범위와 겹치지 않는 텍스트 노드만, 원본 좌표 기준)
   const usedRanges = chipOps.map(op => [op.rawStart, op.rawEnd]);
   function overlapsUsed(start, end) {
     return usedRanges.some(([us, ue]) => !(end <= us || start >= ue));
@@ -1203,7 +1203,7 @@ function injectChipsAndDraggableMarkers(html, vars) {
     if (overlapsUsed(n.rawStart, n.rawEnd)) continue;
     const rawSlice = html.slice(n.rawStart, n.rawEnd);
     if (normalize(rawSlice) !== n.text) continue; // 안전장치
-    const marker = `<span class="kdoc-draggable" data-raw-start="${n.rawStart}" data-raw-end="${n.rawEnd}">${rawSlice}</span>`;
+    const marker = `<span class="kdoc-clickable" data-raw-start="${n.rawStart}" data-raw-end="${n.rawEnd}">${rawSlice}</span>`;
     markerOps.push({ kind: 'marker', rawStart: n.rawStart, rawEnd: n.rawEnd, html: marker });
   }
 
@@ -1218,64 +1218,51 @@ function injectChipsAndDraggableMarkers(html, vars) {
   return result;
 }
 
-// iframe 내부에 주입할 드래그 감지 스크립트.
-// 사용자가 .kdoc-draggable 영역 안에서 텍스트를 마우스로 선택하면,
-// 선택 시작/끝 지점이 속한 마커의 data-raw-start를 기준으로 정밀 좌표를 계산해
-// 부모 창에 postMessage로 전달한다.
-const DRAG_SELECT_SCRIPT = `
+// iframe 내부에 주입할 클릭 선택 감지 스크립트.
+// 사용자가 .kdoc-clickable 마커를 클릭하면, 그 마커의 위치(data-raw-start/end)와
+// 텍스트를 그대로 부모 창에 postMessage로 전달한다.
+// (드래그 부분 선택 대신 이미 검증된 노드 단위 통째 선택만 지원 — 훨씬 단순하고 안정적)
+const CLICK_SELECT_SCRIPT = `
 <style>
-  .kdoc-draggable { cursor: text; }
-  .kdoc-draggable:hover { background: rgba(37,99,235,0.08); outline: 1px dashed rgba(37,99,235,0.3); }
+  .kdoc-clickable { cursor: pointer; }
+  .kdoc-clickable:hover { background: rgba(37,99,235,0.12); outline: 1px dashed rgba(37,99,235,0.4); border-radius: 2px; }
 </style>
 <script>
-document.addEventListener('mouseup', function() {
-  const sel = window.getSelection();
-  if (!sel || sel.isCollapsed || sel.rangeCount === 0) return;
-  const text = sel.toString().trim();
-  if (!text) return;
-
-  const range = sel.getRangeAt(0);
-  let startEl = range.startContainer.nodeType === 3 ? range.startContainer.parentElement : range.startContainer;
-  const markerEl = startEl ? startEl.closest('.kdoc-draggable') : null;
+document.addEventListener('click', function(e) {
+  const markerEl = e.target.closest ? e.target.closest('.kdoc-clickable') : null;
   if (!markerEl) return;
+  e.preventDefault();
 
-  let endEl = range.endContainer.nodeType === 3 ? range.endContainer.parentElement : range.endContainer;
-  const endMarkerEl = endEl ? endEl.closest('.kdoc-draggable') : null;
-  if (endMarkerEl !== markerEl) return;
-
-  const markerRawStart = parseInt(markerEl.getAttribute('data-raw-start'), 10);
-  const markerText = markerEl.textContent;
-  const offsetInMarker = markerText.indexOf(text);
-  if (offsetInMarker === -1) return;
-
-  const preciseStart = markerRawStart + offsetInMarker;
-  const preciseEnd = preciseStart + text.length;
+  const rawStart = parseInt(markerEl.getAttribute('data-raw-start'), 10);
+  const rawEnd = parseInt(markerEl.getAttribute('data-raw-end'), 10);
+  const text = markerEl.textContent;
+  if (isNaN(rawStart) || isNaN(rawEnd) || !text) return;
 
   window.parent.postMessage({
-    kdocDragSelect: true,
+    kdocClickSelect: true,
     text: text,
-    rawStart: preciseStart,
-    rawEnd: preciseEnd
+    rawStart: rawStart,
+    rawEnd: rawEnd
   }, '*');
 });
 <` + `/script>
 `;
 
-// Step2 전용 렌더 — 기존 renderPreview와 동일한 외관이지만 드래그 가능 마커가 추가됨
+// Step2 전용 렌더 — 기존 renderPreview와 동일한 외관이지만 클릭 가능 마커가 추가됨
 function renderPreviewWithDrag(containerId, html, vars) {
   const container = document.getElementById(containerId);
   if (!container) return;
 
-  // chip 치환과 드래그 마커 삽입을 원본 HTML 좌표계 기준으로 한 번에 처리
+  // chip 치환과 클릭 마커 삽입을 원본 HTML 좌표계 기준으로 한 번에 처리
   // (별도 단계로 나누면 chip 삽입 후 길이가 변해 좌표가 어긋나는 버그가 생기므로 반드시 통합 처리)
-  let injected = injectChipsAndDraggableMarkers(html, vars || []);
+  let injected = injectChipsAndClickableMarkers(html, vars || []);
   injected = dimHeaderFields(injected);
-  // dimHeaderFields가 DOMParser로 재파싱/직렬화하므로, 드래그 스크립트는 그 이후에 추가해야
+  // dimHeaderFields가 DOMParser로 재파싱/직렬화하므로, 클릭 스크립트는 그 이후에 추가해야
   // 스크립트 태그가 보존된다 (head 끝에 삽입)
   if (injected.includes('</head>')) {
-    injected = injected.replace('</head>', DRAG_SELECT_SCRIPT + '</head>');
+    injected = injected.replace('</head>', CLICK_SELECT_SCRIPT + '</head>');
   } else {
-    injected = DRAG_SELECT_SCRIPT + injected;
+    injected = CLICK_SELECT_SCRIPT + injected;
   }
 
   let iframe = container.querySelector('iframe.doc-iframe');
@@ -1299,11 +1286,11 @@ function renderPreviewWithDrag(containerId, html, vars) {
   iframe.style.height = '600px';
 }
 
-// 드래그 선택 메시지를 받아서 처리 (Step2가 활성화된 동안만 동작)
+// 클릭 선택 메시지를 받아서 처리 (Step2가 활성화된 동안만 동작)
 window.addEventListener('message', (event) => {
-  if (!event.data || !event.data.kdocDragSelect) return;
+  if (!event.data || !event.data.kdocClickSelect) return;
   if (state.step !== 2) return; // Step2가 아닐 때는 무시 (다른 화면의 iframe과 혼선 방지)
-  onDragSelectText(event.data.text, event.data.rawStart, event.data.rawEnd);
+  onClickSelectText(event.data.text, event.data.rawStart, event.data.rawEnd);
 });
 
 // iframe으로 렌더 — MHT 원본 스타일 100% 보존 (matchText 자리에 chip 주입)
@@ -2326,11 +2313,11 @@ function closeModalForce() {
 }
 
 // ===================================================
-// 드래그로 변수 추가하기
+// 클릭으로 변수 추가하기
 // ===================================================
 
-// 드래그로 선택된 텍스트를 받아 AI에게 변수명을 제안받고, 모달로 확인/수정 후 추가한다.
-async function onDragSelectText(selectedText, rawStart, rawEnd) {
+// 클릭으로 선택된 텍스트를 받아 AI에게 변수명을 제안받고, 모달로 확인/수정 후 추가한다.
+async function onClickSelectText(selectedText, rawStart, rawEnd) {
   // 위치가 원본 templateHtml과 정확히 일치하는지 먼저 검증 (안전장치)
   const rawSlice = state.templateHtml.slice(rawStart, rawEnd);
   if (rawSlice.replace(/&nbsp;/g, ' ') !== selectedText) {
@@ -2348,7 +2335,7 @@ async function onDragSelectText(selectedText, rawStart, rawEnd) {
     return;
   }
 
-  openDragVarModal(selectedText, rawStart, rawEnd, null); // AI 제안 전, 우선 로딩 상태로 모달 표시
+  openClickVarModal(selectedText, rawStart, rawEnd, null); // AI 제안 전, 우선 로딩 상태로 모달 표시
 
   // AI에게 변수명/타입 제안 요청 (실패해도 모달에서 직접 입력 가능하도록 진행)
   let suggestion = { key: '', type: 'text' };
@@ -2357,7 +2344,7 @@ async function onDragSelectText(selectedText, rawStart, rawEnd) {
   } catch (e) {
     // 제안 실패 시 빈 값으로 두고 사용자가 직접 입력하게 함
   }
-  openDragVarModal(selectedText, rawStart, rawEnd, suggestion);
+  openClickVarModal(selectedText, rawStart, rawEnd, suggestion);
 }
 
 async function suggestVarNameForText(selectedText) {
@@ -2390,7 +2377,7 @@ async function suggestVarNameForText(selectedText) {
   return JSON.parse(jsonMatch[0]);
 }
 
-function openDragVarModal(selectedText, rawStart, rawEnd, suggestion) {
+function openClickVarModal(selectedText, rawStart, rawEnd, suggestion) {
   document.getElementById('modal-title').textContent = '변수로 추가하기';
 
   const isLoading = suggestion === null;
@@ -2416,7 +2403,7 @@ function openDragVarModal(selectedText, rawStart, rawEnd, suggestion) {
 
   document.getElementById('modal-actions').innerHTML = `
     <button class="btn-cancel" onclick="closeModalForce()">취소</button>
-    <button class="btn-primary" onclick="confirmDragVarAdd(${rawStart}, ${rawEnd})">추가하기</button>
+    <button class="btn-primary" onclick="confirmClickVarAdd(${rawStart}, ${rawEnd})">추가하기</button>
   `;
 
   document.getElementById('modal-overlay').classList.add('open');
@@ -2428,7 +2415,7 @@ function openDragVarModal(selectedText, rawStart, rawEnd, suggestion) {
   }, 50);
 }
 
-function confirmDragVarAdd(rawStart, rawEnd) {
+function confirmClickVarAdd(rawStart, rawEnd) {
   const keyInput = document.getElementById('drag-var-key');
   const typeSelect = document.getElementById('drag-var-type');
   const key = (keyInput.value || '').trim();
