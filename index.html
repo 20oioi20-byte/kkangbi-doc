@@ -1169,32 +1169,51 @@ function dimHeaderFields(html) {
 //  Step2 화면에서만 쓰는 별도 렌더 경로로 분리)
 // ===================================================
 
-// 아직 변수화되지 않은 텍스트 노드들에 위치 정보(data-raw-start/end)를 가진
-// <span class="kdoc-draggable">로 감싼다. 이미 변수(chip)로 쓰인 위치는 건드리지 않는다.
-function injectDraggableMarkers(html, vars) {
-  const nodes = extractTextNodes(html);
+// Step2 전용: 원본 HTML(state.templateHtml, chip 없는 순수 원본)을 기준으로
+// (1) 변수 chip 치환 위치와 (2) 드래그 가능 마커로 감쌀 위치를 모두 "원본 좌표계"에서 모아
+// 하나의 치환 목록으로 합친 뒤, 뒤에서부터 한 번에 적용한다.
+//
+// ⚠️ 반드시 원본 HTML 기준으로만 좌표를 계산해야 한다. chip을 먼저 주입한 뒤
+// 그 결과물에서 마커 좌표를 다시 뽑으면, chip 삽입으로 HTML 길이가 변하면서
+// 이후 텍스트의 위치가 전부 밀려 원본 좌표계와 어긋나는 버그가 생긴다.
+function injectChipsAndDraggableMarkers(html, vars) {
+  const normalize = s => s.replace(/&nbsp;/g, ' ');
 
-  // 이미 변수로 매칭된 위치 범위들(occurrences 포함) — 이 범위와 겹치는 노드는 마커 대상에서 제외
-  const usedRanges = [];
+  // 1) chip으로 치환할 위치 목록 (원본 좌표 기준)
+  const chipOps = [];
   for (const v of vars) {
-    const occs = (v.occurrences && v.occurrences.length) ? v.occurrences : [{ rawStart: v.rawStart, rawEnd: v.rawEnd }];
-    for (const o of occs) {
-      if (typeof o.rawStart === 'number' && typeof o.rawEnd === 'number') usedRanges.push([o.rawStart, o.rawEnd]);
+    const occs = (v.occurrences && v.occurrences.length) ? v.occurrences : [{ matchText: v.matchText, rawStart: v.rawStart, rawEnd: v.rawEnd }];
+    for (const occ of occs) {
+      if (occ.matchText && typeof occ.rawStart === 'number' && typeof occ.rawEnd === 'number') {
+        const rawSlice = html.slice(occ.rawStart, occ.rawEnd);
+        if (normalize(rawSlice) !== occ.matchText) continue; // 안전장치
+        chipOps.push({ kind: 'chip', rawStart: occ.rawStart, rawEnd: occ.rawEnd, html: makeChipHtml(v.key, v.type) });
+      }
     }
   }
+
+  // 2) 드래그 마커로 감쌀 위치 목록 (chip이 차지한 범위와 겹치지 않는 텍스트 노드만, 원본 좌표 기준)
+  const usedRanges = chipOps.map(op => [op.rawStart, op.rawEnd]);
   function overlapsUsed(start, end) {
     return usedRanges.some(([us, ue]) => !(end <= us || start >= ue));
   }
+  const nodes = extractTextNodes(html);
+  const markerOps = [];
+  for (const n of nodes) {
+    if (overlapsUsed(n.rawStart, n.rawEnd)) continue;
+    const rawSlice = html.slice(n.rawStart, n.rawEnd);
+    if (normalize(rawSlice) !== n.text) continue; // 안전장치
+    const marker = `<span class="kdoc-draggable" data-raw-start="${n.rawStart}" data-raw-end="${n.rawEnd}">${rawSlice}</span>`;
+    markerOps.push({ kind: 'marker', rawStart: n.rawStart, rawEnd: n.rawEnd, html: marker });
+  }
+
+  // 3) 두 목록을 합쳐 위치(rawStart) 기준 내림차순으로 정렬 후 한 번에 적용
+  //    (chip과 마커는 절대 겹치지 않으므로 순서 안전)
+  const allOps = [...chipOps, ...markerOps].sort((a, b) => b.rawStart - a.rawStart);
 
   let result = html;
-  // 뒤에서부터 삽입해야 앞쪽 인덱스가 안 밀림
-  const sortedNodes = [...nodes].sort((a, b) => b.rawStart - a.rawStart);
-  for (const n of sortedNodes) {
-    if (overlapsUsed(n.rawStart, n.rawEnd)) continue;
-    const rawSlice = result.slice(n.rawStart, n.rawEnd);
-    if (rawSlice.replace(/&nbsp;/g, ' ') !== n.text) continue; // 안전장치: 위치가 어긋났으면 건너뜀
-    const marker = `<span class="kdoc-draggable" data-raw-start="${n.rawStart}" data-raw-end="${n.rawEnd}">${rawSlice}</span>`;
-    result = result.slice(0, n.rawStart) + marker + result.slice(n.rawEnd);
+  for (const op of allOps) {
+    result = result.slice(0, op.rawStart) + op.html + result.slice(op.rawEnd);
   }
   return result;
 }
@@ -1247,8 +1266,9 @@ function renderPreviewWithDrag(containerId, html, vars) {
   const container = document.getElementById(containerId);
   if (!container) return;
 
-  let injected = injectVarChipsIntoHtml(html, vars || []);
-  injected = injectDraggableMarkers(injected, vars || []);
+  // chip 치환과 드래그 마커 삽입을 원본 HTML 좌표계 기준으로 한 번에 처리
+  // (별도 단계로 나누면 chip 삽입 후 길이가 변해 좌표가 어긋나는 버그가 생기므로 반드시 통합 처리)
+  let injected = injectChipsAndDraggableMarkers(html, vars || []);
   injected = dimHeaderFields(injected);
   // dimHeaderFields가 DOMParser로 재파싱/직렬화하므로, 드래그 스크립트는 그 이후에 추가해야
   // 스크립트 태그가 보존된다 (head 끝에 삽입)
