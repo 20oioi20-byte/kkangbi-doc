@@ -589,6 +589,34 @@ a { text-decoration: none; color: inherit; }
   transition: all .15s;
 }
 .add-var-btn:hover { background: var(--blue-light); color: var(--blue); border-color: var(--blue); }
+
+/* AI 자동계산 변수 추가 박스 */
+.ai-calc-box {
+  margin: 10px 16px 4px;
+  padding: 10px;
+  background: #FAF5FF;
+  border: 1px solid #E9D5FF;
+  border-radius: var(--radius-sm);
+}
+.ai-calc-label {
+  font-size: 11px; font-weight: 700; color: #7C3AED; margin-bottom: 6px;
+}
+.ai-calc-textarea {
+  width: 100%; min-height: 50px; padding: 7px 9px;
+  border: 1px solid #E9D5FF; border-radius: var(--radius-sm);
+  font-size: 12px; resize: vertical; font-family: inherit;
+  background: var(--surface);
+}
+.ai-calc-textarea:focus { border-color: #C084FC; outline: none; }
+.btn-ai-calc-add {
+  width: 100%; margin-top: 6px;
+  background: linear-gradient(135deg, #7C3AED, #4F46E5);
+  color: #fff; border: none; padding: 8px;
+  border-radius: var(--radius-sm); font-size: 12px; font-weight: 600;
+  transition: all .15s;
+}
+.btn-ai-calc-add:hover { opacity: .9; }
+.btn-ai-calc-add:disabled { background: var(--border-strong); color: var(--text-muted); }
 </style>
 </head>
 <body>
@@ -715,6 +743,12 @@ a { text-decoration: none; color: inherit; }
               <span class="vars-count-badge" id="badge-calc">0</span>
             </div>
             <div id="vars-calc-group"></div>
+            <!-- AI 자동계산 변수 추가 -->
+            <div class="ai-calc-box">
+              <div class="ai-calc-label">✨ 자동계산 변수 AI로 추가</div>
+              <textarea id="ai-calc-input" class="ai-calc-textarea" placeholder="예: 공급가액합계는 LG공급가액 + ASP공급가액으로 계산해줘"></textarea>
+              <button class="btn-ai-calc-add" id="btn-ai-calc-add" onclick="runAiCalcAdd()">AI로 분석해서 추가</button>
+            </div>
             <!-- 추가 버튼 -->
             <button class="add-var-btn" onclick="addVar()">＋ 변수 직접 추가</button>
           </div>
@@ -1129,6 +1163,129 @@ function dimHeaderFields(html) {
   return doc.documentElement.outerHTML;
 }
 
+// ===================================================
+// STEP2 전용: 드래그로 변수 추가하기 위한 위치 마커 삽입
+// (기존 renderPreview/injectVarChipsIntoHtml은 건드리지 않고,
+//  Step2 화면에서만 쓰는 별도 렌더 경로로 분리)
+// ===================================================
+
+// 아직 변수화되지 않은 텍스트 노드들에 위치 정보(data-raw-start/end)를 가진
+// <span class="kdoc-draggable">로 감싼다. 이미 변수(chip)로 쓰인 위치는 건드리지 않는다.
+function injectDraggableMarkers(html, vars) {
+  const nodes = extractTextNodes(html);
+
+  // 이미 변수로 매칭된 위치 범위들(occurrences 포함) — 이 범위와 겹치는 노드는 마커 대상에서 제외
+  const usedRanges = [];
+  for (const v of vars) {
+    const occs = (v.occurrences && v.occurrences.length) ? v.occurrences : [{ rawStart: v.rawStart, rawEnd: v.rawEnd }];
+    for (const o of occs) {
+      if (typeof o.rawStart === 'number' && typeof o.rawEnd === 'number') usedRanges.push([o.rawStart, o.rawEnd]);
+    }
+  }
+  function overlapsUsed(start, end) {
+    return usedRanges.some(([us, ue]) => !(end <= us || start >= ue));
+  }
+
+  let result = html;
+  // 뒤에서부터 삽입해야 앞쪽 인덱스가 안 밀림
+  const sortedNodes = [...nodes].sort((a, b) => b.rawStart - a.rawStart);
+  for (const n of sortedNodes) {
+    if (overlapsUsed(n.rawStart, n.rawEnd)) continue;
+    const rawSlice = result.slice(n.rawStart, n.rawEnd);
+    if (rawSlice.replace(/&nbsp;/g, ' ') !== n.text) continue; // 안전장치: 위치가 어긋났으면 건너뜀
+    const marker = `<span class="kdoc-draggable" data-raw-start="${n.rawStart}" data-raw-end="${n.rawEnd}">${rawSlice}</span>`;
+    result = result.slice(0, n.rawStart) + marker + result.slice(n.rawEnd);
+  }
+  return result;
+}
+
+// iframe 내부에 주입할 드래그 감지 스크립트.
+// 사용자가 .kdoc-draggable 영역 안에서 텍스트를 마우스로 선택하면,
+// 선택 시작/끝 지점이 속한 마커의 data-raw-start를 기준으로 정밀 좌표를 계산해
+// 부모 창에 postMessage로 전달한다.
+const DRAG_SELECT_SCRIPT = `
+<style>
+  .kdoc-draggable { cursor: text; }
+  .kdoc-draggable:hover { background: rgba(37,99,235,0.08); outline: 1px dashed rgba(37,99,235,0.3); }
+</style>
+<script>
+document.addEventListener('mouseup', function() {
+  const sel = window.getSelection();
+  if (!sel || sel.isCollapsed || sel.rangeCount === 0) return;
+  const text = sel.toString().trim();
+  if (!text) return;
+
+  const range = sel.getRangeAt(0);
+  let startEl = range.startContainer.nodeType === 3 ? range.startContainer.parentElement : range.startContainer;
+  const markerEl = startEl ? startEl.closest('.kdoc-draggable') : null;
+  if (!markerEl) return;
+
+  let endEl = range.endContainer.nodeType === 3 ? range.endContainer.parentElement : range.endContainer;
+  const endMarkerEl = endEl ? endEl.closest('.kdoc-draggable') : null;
+  if (endMarkerEl !== markerEl) return;
+
+  const markerRawStart = parseInt(markerEl.getAttribute('data-raw-start'), 10);
+  const markerText = markerEl.textContent;
+  const offsetInMarker = markerText.indexOf(text);
+  if (offsetInMarker === -1) return;
+
+  const preciseStart = markerRawStart + offsetInMarker;
+  const preciseEnd = preciseStart + text.length;
+
+  window.parent.postMessage({
+    kdocDragSelect: true,
+    text: text,
+    rawStart: preciseStart,
+    rawEnd: preciseEnd
+  }, '*');
+});
+<` + `/script>
+`;
+
+// Step2 전용 렌더 — 기존 renderPreview와 동일한 외관이지만 드래그 가능 마커가 추가됨
+function renderPreviewWithDrag(containerId, html, vars) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+
+  let injected = injectVarChipsIntoHtml(html, vars || []);
+  injected = injectDraggableMarkers(injected, vars || []);
+  injected = dimHeaderFields(injected);
+  // dimHeaderFields가 DOMParser로 재파싱/직렬화하므로, 드래그 스크립트는 그 이후에 추가해야
+  // 스크립트 태그가 보존된다 (head 끝에 삽입)
+  if (injected.includes('</head>')) {
+    injected = injected.replace('</head>', DRAG_SELECT_SCRIPT + '</head>');
+  } else {
+    injected = DRAG_SELECT_SCRIPT + injected;
+  }
+
+  let iframe = container.querySelector('iframe.doc-iframe');
+  if (!iframe) {
+    iframe = document.createElement('iframe');
+    iframe.className = 'doc-iframe';
+    iframe.style.cssText = 'width:100%;border:none;background:white;display:block;';
+    container.innerHTML = '';
+    container.appendChild(iframe);
+  }
+
+  iframe.srcdoc = injected;
+  iframe.onload = () => {
+    try {
+      const h = iframe.contentDocument.body.scrollHeight;
+      iframe.style.height = Math.max(h + 40, 400) + 'px';
+    } catch(e) {
+      iframe.style.height = '600px';
+    }
+  };
+  iframe.style.height = '600px';
+}
+
+// 드래그 선택 메시지를 받아서 처리 (Step2가 활성화된 동안만 동작)
+window.addEventListener('message', (event) => {
+  if (!event.data || !event.data.kdocDragSelect) return;
+  if (state.step !== 2) return; // Step2가 아닐 때는 무시 (다른 화면의 iframe과 혼선 방지)
+  onDragSelectText(event.data.text, event.data.rawStart, event.data.rawEnd);
+});
+
 // iframe으로 렌더 — MHT 원본 스타일 100% 보존 (matchText 자리에 chip 주입)
 function renderPreview(containerId, html, vars) {
   const container = document.getElementById(containerId);
@@ -1399,7 +1556,7 @@ function showStep2() {
   document.getElementById('diff-banner-text').textContent =
     `같은 양식 감지됨 — AI가 ${varCount}개 변수를 자동 추출했어요`;
 
-  renderPreview('doc-render', state.templateHtml, state.vars);
+  renderPreviewWithDrag('doc-render', state.templateHtml, state.vars);
   renderVarsList();
 }
 
@@ -1449,19 +1606,119 @@ function updateVar(idx, field, value) {
   state.vars[idx][field] = value;
   if (field === 'type') {
     renderVarsList();
-    renderPreview('doc-render', state.templateHtml, state.vars);
+    renderPreviewWithDrag('doc-render', state.templateHtml, state.vars);
   }
 }
 
 function deleteVar(idx) {
   state.vars.splice(idx, 1);
   renderVarsList();
-  renderPreview('doc-render', state.templateHtml, state.vars);
+  renderPreviewWithDrag('doc-render', state.templateHtml, state.vars);
 }
 
 function addVar() {
   state.vars.push({ key: '새변수', type: 'text', example: '', formula: '', matchText: '' });
   renderVarsList();
+}
+
+// AI에게 자연어 설명을 보내 calc(자동계산) 변수를 추가한다.
+// 기존 변수 목록(key 목록)을 함께 전달해 정확한 수식을 만들도록 돕는다.
+async function runAiCalcAdd() {
+  const input = document.getElementById('ai-calc-input');
+  const desc = (input.value || '').trim();
+  if (!desc) { toast('계산 방법을 입력해주세요', 'error'); return; }
+
+  const btn = document.getElementById('btn-ai-calc-add');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> 분석 중...';
+
+  try {
+    const existingKeys = state.vars.map(v => `${v.key} (${v.type})`).join(', ');
+
+    const prompt = `사용자가 자동계산(calc) 변수를 추가하고 싶어합니다. 아래는 현재 등록된 변수 목록과, 사용자가 입력한 계산 방법 설명입니다.
+
+[현재 변수 목록]
+${existingKeys || '(없음)'}
+
+[사용자 설명]
+${desc}
+
+규칙:
+- key는 한글로 간결하게 (이미 있는 키와 겹치지 않게)
+- formula는 "키1 + 키2" 또는 "키1 × 0.1" 같은 형식으로, 반드시 위 변수 목록에 있는 key만 사용
+- 변수 목록에 없는 키를 수식에 사용하지 마세요
+- 사용자 설명이 모호해서 어떤 변수로 계산해야 할지 판단할 수 없으면 formula를 빈 문자열로 두세요
+
+아래 JSON 객체 형식으로만 응답하세요. 다른 설명 없이 JSON만 출력하세요:
+{"key":"공급가액합계","formula":"LG공급가액 + ASP공급가액"}`;
+
+    const resp = await fetch(`${API_BASE}/claude`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 500,
+        messages: [{ role: 'user', content: prompt }]
+      })
+    });
+
+    if (!resp.ok) throw new Error(`AI 요청 실패 (${resp.status})`);
+    const data = await resp.json();
+    let text = data.content?.[0]?.text || '{}';
+    text = text.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) throw new Error('AI 응답을 해석하지 못했습니다');
+
+    const parsed = JSON.parse(jsonMatch[0]);
+    if (!parsed.key) throw new Error('변수 이름을 만들지 못했습니다');
+    if (!parsed.formula) throw new Error('수식을 만들지 못했습니다. 더 구체적으로 설명해주세요 (예: "A는 B + C로 계산")');
+
+    // 같은 key가 이미 있으면 덮어쓰지 않고 안내
+    if (state.vars.some(v => v.key === parsed.key)) {
+      throw new Error(`"${parsed.key}" 변수가 이미 존재합니다. 다른 이름으로 설명해주세요`);
+    }
+
+    // 수식이 가리키는 변수들의 5월 예시값(example)으로 실제 계산 결과를 만들고,
+    // 그 값이 본문 어딘가에 실제로 존재하는지 찾아 위치를 매칭한다.
+    // (이 변수는 "이미 문서에 있는 합계 칸인데 diff에서 안 잡힌 경우"를 위한 것이므로,
+    //  계산 결과와 일치하는 텍스트가 본문에 없으면 사용자에게 알리고 추가하지 않는다.)
+    const exampleValues = {};
+    for (const v of state.vars) exampleValues[v.key] = v.example || v.matchText || '';
+
+    const calcResult = evalFormula(parsed.formula, exampleValues);
+    if (calcResult === null) {
+      throw new Error('수식 계산에 필요한 변수의 예시값을 찾지 못했습니다. 수식에 사용된 변수명을 확인해주세요');
+    }
+
+    // 계산 결과를 문서에 표시되는 형식(천 단위 쉼표)으로 변환해 본문에서 검색
+    const calcResultFormatted = calcResult.toLocaleString();
+    const allTextNodes = extractTextNodes(state.templateHtml);
+    const matchedNode = allTextNodes.find(n => n.text === calcResultFormatted || n.text === String(calcResult));
+
+    if (!matchedNode) {
+      throw new Error(`계산 결과(${calcResultFormatted})와 일치하는 값을 본문에서 찾지 못했습니다. 문서에 이미 있는 합계 칸을 설명해주세요`);
+    }
+
+    state.vars.push({
+      key: parsed.key,
+      type: 'calc',
+      formula: parsed.formula,
+      example: matchedNode.text,
+      matchText: matchedNode.text,
+      rawStart: matchedNode.rawStart,
+      rawEnd: matchedNode.rawEnd
+    });
+
+    renderVarsList();
+    renderPreviewWithDrag('doc-render', state.templateHtml, state.vars);
+    input.value = '';
+    toast(`"${parsed.key}" 자동계산 변수 추가됨`, 'success');
+  } catch (err) {
+    toast('추가 실패: ' + err.message, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = 'AI로 분석해서 추가';
+  }
 }
 
 // ===================================================
@@ -1678,11 +1935,49 @@ function renderTemplates(templates) {
 // ===================================================
 // WRITE PAGE
 // ===================================================
-function openWrite(idx) {
+// 날짜/기간류 변수 판별 — 직전 자료 자동 채움에서 제외 대상
+// (key 이름 패턴 + 예시값 패턴 둘 다 확인해 오탐을 줄임)
+function isDateLikeVar(v) {
+  const keyHasDateWord = /연월|기간|날짜|일자|월분|청구월|보고월|년월/.test(v.key || '');
+  const exampleLooksLikeDate = /\d{4}\s*[.\-]\s*\d{1,2}\s*[.\-]\s*\d{1,2}|\d{2,4}\s*년\s*\d{1,2}\s*월|~|\d{1,2}\s*월\s*분?$/.test(v.example || v.matchText || '');
+  return keyHasDateWord || exampleLooksLikeDate;
+}
+
+// 같은 템플릿(tpl_name)의 가장 최근 작성 이력에서 입력값을 가져온다.
+// 날짜류 변수는 제외하고, 금액 등 나머지 값만 기본값으로 채운다.
+async function fetchLastValuesForTpl(tplName, vars) {
+  let history = [];
+  try {
+    history = await sbSelect('doc_history', { order: 'created_at', desc: true, limit: 50 }) || [];
+  } catch {
+    history = JSON.parse(localStorage.getItem('kkangbi_history') || '[]');
+  }
+
+  const lastEntry = history.find(h => h.tpl_name === tplName);
+  if (!lastEntry || !lastEntry.values) return {};
+
+  const result = {};
+  for (const v of vars) {
+    if (v.type === 'calc') continue;       // calc는 자동계산이므로 제외
+    if (isDateLikeVar(v)) continue;          // 날짜/기간류는 매번 새로 입력해야 하므로 제외
+    if (lastEntry.values[v.key] !== undefined && lastEntry.values[v.key] !== '') {
+      result[v.key] = lastEntry.values[v.key];
+    }
+  }
+  return result;
+}
+
+async function openWrite(idx) {
   const tpl = state.templates[idx];
   if (!tpl) return;
   state.currentTpl = tpl;
-  state.writeValues = {};
+
+  // 직전 자료 기본값 조회 (날짜류 제외) — 실패해도 빈 값으로 진행
+  let prefill = {};
+  try {
+    prefill = await fetchLastValuesForTpl(tpl.name, tpl.vars || []);
+  } catch (e) { /* 조회 실패 시 그냥 빈 값으로 시작 */ }
+  state.writeValues = { ...prefill };
 
   document.getElementById('write-tpl-name').textContent = tpl.name;
   document.getElementById('write-panel-title').textContent = (tpl.icon||'📄') + ' 월별 변수 입력';
@@ -1699,9 +1994,11 @@ function openWrite(idx) {
         <div class="input-label">
           {{${v.key}}}
           <span class="badge badge-${v.type}">${v.type}</span>
+          ${prefill[v.key] !== undefined ? '<span style="font-size:10px;color:var(--green);font-weight:600;">직전값</span>' : ''}
         </div>
         <input type="text" class="input-field" id="write-${v.key}"
           placeholder="예: ${v.example||''}"
+          value="${prefill[v.key] !== undefined ? escapeHtml(String(prefill[v.key])) : ''}"
           oninput="onWriteInput('${v.key}', this.value)">
       </div>`).join('')}
     ${calcVars.length > 0 ? `
@@ -1718,8 +2015,18 @@ function openWrite(idx) {
       </div>`).join('')}` : ''}
   `;
 
-  // 초기 미리보기
-  renderWithValues('write-render', tpl.html, tpl.vars, {});
+  // calc 변수는 prefill된 입력값 기준으로 한 번 미리 계산해 표시
+  for (const v of calcVars) {
+    const calcVal = evalFormula(v.formula, state.writeValues);
+    if (calcVal !== null) {
+      state.writeValues[v.key] = calcVal;
+      const el = document.getElementById(`write-${v.key}`);
+      if (el) el.value = calcVal.toLocaleString();
+    }
+  }
+
+  // 초기 미리보기 (직전값이 채워진 상태로 표시)
+  renderWithValues('write-render', tpl.html, tpl.vars, state.writeValues);
   goPage('write');
 }
 
@@ -1975,6 +2282,7 @@ function resetNew() {
 }
 
 function setStepActive(n) {
+  state.step = n;
   for (let i = 1; i <= 4; i++) {
     const item = document.getElementById(`step-item-${i}`);
     if (!item) continue;
@@ -1991,6 +2299,138 @@ function closeModal(e) {
   if (e.target === document.getElementById('modal-overlay')) {
     document.getElementById('modal-overlay').classList.remove('open');
   }
+}
+
+function closeModalForce() {
+  document.getElementById('modal-overlay').classList.remove('open');
+}
+
+// ===================================================
+// 드래그로 변수 추가하기
+// ===================================================
+
+// 드래그로 선택된 텍스트를 받아 AI에게 변수명을 제안받고, 모달로 확인/수정 후 추가한다.
+async function onDragSelectText(selectedText, rawStart, rawEnd) {
+  // 위치가 원본 templateHtml과 정확히 일치하는지 먼저 검증 (안전장치)
+  const rawSlice = state.templateHtml.slice(rawStart, rawEnd);
+  if (rawSlice.replace(/&nbsp;/g, ' ') !== selectedText) {
+    toast('선택한 위치를 정확히 찾지 못했습니다. 다시 선택해주세요', 'error');
+    return;
+  }
+
+  // 이미 변수로 쓰인 범위와 겹치는지 다시 한번 확인 (마커가 제외했어도 이중 안전장치)
+  const overlapsExisting = state.vars.some(v => {
+    const occs = (v.occurrences && v.occurrences.length) ? v.occurrences : [{ rawStart: v.rawStart, rawEnd: v.rawEnd }];
+    return occs.some(o => typeof o.rawStart === 'number' && !(rawEnd <= o.rawStart || rawStart >= o.rawEnd));
+  });
+  if (overlapsExisting) {
+    toast('이미 변수로 등록된 부분입니다', 'error');
+    return;
+  }
+
+  openDragVarModal(selectedText, rawStart, rawEnd, null); // AI 제안 전, 우선 로딩 상태로 모달 표시
+
+  // AI에게 변수명/타입 제안 요청 (실패해도 모달에서 직접 입력 가능하도록 진행)
+  let suggestion = { key: '', type: 'text' };
+  try {
+    suggestion = await suggestVarNameForText(selectedText);
+  } catch (e) {
+    // 제안 실패 시 빈 값으로 두고 사용자가 직접 입력하게 함
+  }
+  openDragVarModal(selectedText, rawStart, rawEnd, suggestion);
+}
+
+async function suggestVarNameForText(selectedText) {
+  const existingKeys = state.vars.map(v => v.key).join(', ');
+  const prompt = `한국 회사 공문 문서에서 다음 텍스트가 선택되었습니다: "${selectedText}"
+이미 등록된 변수 이름: ${existingKeys || '(없음)'}
+
+이 텍스트가 무엇을 의미하는지 보고, 적절한 한글 변수명(key)과 타입(text 또는 amount)을 제안하세요.
+- key는 간결한 한글로, 기존 변수명과 겹치지 않게
+- 금액(숫자+쉼표)이면 amount, 그 외(날짜/기간/이름 등)는 text
+
+아래 JSON 객체 형식으로만 응답하세요. 다른 설명 없이 JSON만 출력하세요:
+{"key":"제안된변수명","type":"text"}`;
+
+  const resp = await fetch(`${API_BASE}/claude`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 300,
+      messages: [{ role: 'user', content: prompt }]
+    })
+  });
+  if (!resp.ok) throw new Error('AI 제안 요청 실패');
+  const data = await resp.json();
+  let resultText = data.content?.[0]?.text || '{}';
+  resultText = resultText.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
+  const jsonMatch = resultText.match(/\{[\s\S]*\}/);
+  if (!jsonMatch) throw new Error('AI 응답 해석 실패');
+  return JSON.parse(jsonMatch[0]);
+}
+
+function openDragVarModal(selectedText, rawStart, rawEnd, suggestion) {
+  document.getElementById('modal-title').textContent = '변수로 추가하기';
+
+  const isLoading = suggestion === null;
+  const suggestedKey = suggestion ? suggestion.key : '';
+  const suggestedType = suggestion ? (suggestion.type || 'text') : 'text';
+
+  document.getElementById('modal-body').innerHTML = `
+    <div style="font-size:12px;color:var(--text-muted);margin-bottom:4px;">선택한 텍스트</div>
+    <div style="font-size:13px;font-weight:600;color:var(--blue);background:var(--blue-light);padding:8px 10px;border-radius:6px;margin-bottom:14px;word-break:break-all;">${escapeHtml(selectedText)}</div>
+
+    <div class="modal-field">
+      <label>변수 이름 ${isLoading ? '<span style="color:var(--text-muted);font-weight:400;">(AI 제안 분석 중...)</span>' : '<span style="color:var(--green);font-weight:400;">(AI 제안 — 수정 가능)</span>'}</label>
+      <input type="text" id="drag-var-key" value="${escapeHtml(suggestedKey)}" placeholder="${isLoading ? '분석 중...' : '예: 청구연월'}">
+    </div>
+    <div class="modal-field">
+      <label>타입</label>
+      <select id="drag-var-type">
+        <option value="text" ${suggestedType==='text'?'selected':''}>text (일반 텍스트)</option>
+        <option value="amount" ${suggestedType==='amount'?'selected':''}>amount (금액)</option>
+      </select>
+    </div>
+  `;
+
+  document.getElementById('modal-actions').innerHTML = `
+    <button class="btn-cancel" onclick="closeModalForce()">취소</button>
+    <button class="btn-primary" onclick="confirmDragVarAdd(${rawStart}, ${rawEnd})">추가하기</button>
+  `;
+
+  document.getElementById('modal-overlay').classList.add('open');
+
+  // 선택 즉시 입력 가능하도록 포커스
+  setTimeout(() => {
+    const input = document.getElementById('drag-var-key');
+    if (input) { input.focus(); input.select(); }
+  }, 50);
+}
+
+function confirmDragVarAdd(rawStart, rawEnd) {
+  const keyInput = document.getElementById('drag-var-key');
+  const typeSelect = document.getElementById('drag-var-type');
+  const key = (keyInput.value || '').trim();
+  const type = typeSelect.value;
+
+  if (!key) { toast('변수 이름을 입력해주세요', 'error'); return; }
+  if (state.vars.some(v => v.key === key)) { toast(`"${key}" 변수가 이미 존재합니다`, 'error'); return; }
+
+  const matchText = state.templateHtml.slice(rawStart, rawEnd);
+
+  state.vars.push({
+    key, type,
+    formula: '',
+    example: matchText,
+    matchText,
+    rawStart, rawEnd
+  });
+
+  closeModalForce();
+  renderVarsList();
+  renderPreviewWithDrag('doc-render', state.templateHtml, state.vars);
+  toast(`"${key}" 변수가 추가되었습니다`, 'success');
 }
 
 // ===================================================
