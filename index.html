@@ -687,7 +687,17 @@ a { text-decoration: none; color: inherit; }
 }
 .btn-edit-tpl:hover { background: var(--border); }
 
-/* AI 자동계산 변수 추가 박스 */
+/* AI 재분석 박스 */
+.ai-reanalyze-box {
+  margin: 8px 16px;
+  padding: 10px;
+  background: #EFF6FF;
+  border: 1px solid #BFDBFE;
+  border-radius: var(--radius-sm);
+}
+.ai-reanalyze-label {
+  font-size: 11px; font-weight: 700; color: #1d4ed8; margin-bottom: 4px;
+}
 .ai-calc-box {
   margin: 10px 16px 4px;
   padding: 10px;
@@ -849,6 +859,13 @@ a { text-decoration: none; color: inherit; }
             <!-- 추가 버튼 -->
             <button class="add-var-btn" onclick="addVar()">＋ 빈 변수 추가 (본문과 무관한 계산용)</button>
           </div>
+          <!-- AI 재분석 요청 박스 (3안) -->
+          <div class="ai-reanalyze-box">
+            <div class="ai-reanalyze-label">🤖 AI에게 수정 요청</div>
+            <div style="font-size:11px;color:var(--text-muted);margin-bottom:6px;">자동 추출 결과가 마음에 안 들면 텍스트로 설명해주세요</div>
+            <textarea id="ai-reanalyze-input" class="ai-calc-textarea" placeholder="예: 청구연월은 제목 괄호 안에 있는 값이고, 공급가액은 표 첫 번째 행 세 번째 칸이야. 부가세는 공급가액×0.1로 계산해줘"></textarea>
+            <button class="btn-ai-calc-add" id="btn-ai-reanalyze" onclick="runAiReanalyze()">AI 재분석해서 변수 목록 업데이트</button>
+          </div>
           <div class="vars-actions">
             <button class="btn-save-tpl" onclick="goStep3()">다음 단계 — 서식 교정 →</button>
             <button class="btn-reset" onclick="resetNew()">↩ 처음부터</button>
@@ -995,16 +1012,12 @@ a { text-decoration: none; color: inherit; }
         <input type="text" id="vep-example" placeholder="예: 26년6월">
       </div>
       <div class="var-edit-field">
-        <label>본문 매칭 위치</label>
-        <div class="var-edit-match-box">
-          <div id="vep-match-text" class="var-edit-match-empty">미지정</div>
+        <label>본문 매칭 텍스트</label>
+        <div style="display:flex;gap:6px;">
+          <input type="text" id="vep-matchtext" placeholder="본문에서 찾을 정확한 텍스트 입력" style="flex:1;">
+          <button class="btn-remap" onclick="applyMatchText()" style="white-space:nowrap;padding:0 12px;">🔍 적용</button>
         </div>
-        <button class="btn-remap" id="btn-remap" onclick="startRemap()">
-          📍 문서에서 클릭해서 위치 재지정
-        </button>
-        <div id="vep-remap-hint" style="font-size:11px;color:var(--text-muted);margin-top:4px;display:none;">
-          왼쪽 문서에서 원하는 텍스트를 클릭하세요. ESC로 취소.
-        </div>
+        <div style="font-size:11px;color:var(--text-muted);margin-top:4px;">본문에 있는 텍스트를 정확히 입력하면 위치를 자동으로 찾아줘요</div>
       </div>
     </div>
     <div class="var-edit-panel-footer">
@@ -1314,152 +1327,6 @@ function dimHeaderFields(html) {
 //  Step2 화면에서만 쓰는 별도 렌더 경로로 분리)
 // ===================================================
 
-// Step2 전용: 원본 HTML(state.templateHtml, chip 없는 순수 원본)을 기준으로
-// (1) 변수 chip 치환 위치와 (2) 클릭 가능 마커로 감쌀 위치를 모두 "원본 좌표계"에서 모아
-// 하나의 치환 목록으로 합친 뒤, 뒤에서부터 한 번에 적용한다.
-//
-// ⚠️ 반드시 원본 HTML 기준으로만 좌표를 계산해야 한다. chip을 먼저 주입한 뒤
-// 그 결과물에서 마커 좌표를 다시 뽑으면, chip 삽입으로 HTML 길이가 변하면서
-// 이후 텍스트의 위치가 전부 밀려 원본 좌표계와 어긋나는 버그가 생긴다.
-function injectChipsAndClickableMarkers(html, vars) {
-  const normalize = s => s.replace(/&nbsp;/g, ' ');
-
-  // 1) chip으로 치환할 위치 목록 (원본 좌표 기준)
-  const chipOps = [];
-  for (const v of vars) {
-    const occs = (v.occurrences && v.occurrences.length) ? v.occurrences : [{ matchText: v.matchText, rawStart: v.rawStart, rawEnd: v.rawEnd }];
-    for (const occ of occs) {
-      if (occ.matchText && typeof occ.rawStart === 'number' && typeof occ.rawEnd === 'number') {
-        const rawSlice = html.slice(occ.rawStart, occ.rawEnd);
-        if (normalize(rawSlice) !== occ.matchText) continue; // 안전장치
-        chipOps.push({ kind: 'chip', rawStart: occ.rawStart, rawEnd: occ.rawEnd, html: makeChipHtml(v.key, v.type) });
-      }
-    }
-  }
-
-  // 2) 클릭 마커로 감쌀 위치 목록 (chip이 차지한 범위와 겹치지 않는 텍스트 노드만, 원본 좌표 기준)
-  const usedRanges = chipOps.map(op => [op.rawStart, op.rawEnd]);
-  function overlapsUsed(start, end) {
-    return usedRanges.some(([us, ue]) => !(end <= us || start >= ue));
-  }
-  const nodes = extractTextNodes(html);
-  const markerOps = [];
-  for (const n of nodes) {
-    if (overlapsUsed(n.rawStart, n.rawEnd)) continue;
-    const rawSlice = html.slice(n.rawStart, n.rawEnd);
-    if (normalize(rawSlice) !== n.text) continue; // 안전장치
-    const marker = `<span class="kdoc-clickable" data-raw-start="${n.rawStart}" data-raw-end="${n.rawEnd}">${rawSlice}</span>`;
-    markerOps.push({ kind: 'marker', rawStart: n.rawStart, rawEnd: n.rawEnd, html: marker });
-  }
-
-  // 3) 두 목록을 합쳐 위치(rawStart) 기준 내림차순으로 정렬 후 한 번에 적용
-  //    (chip과 마커는 절대 겹치지 않으므로 순서 안전)
-  const allOps = [...chipOps, ...markerOps].sort((a, b) => b.rawStart - a.rawStart);
-
-  let result = html;
-  for (const op of allOps) {
-    result = result.slice(0, op.rawStart) + op.html + result.slice(op.rawEnd);
-  }
-  return result;
-}
-
-// iframe 내부에 주입할 클릭 선택 감지 스크립트.
-// 사용자가 .kdoc-clickable 마커를 클릭하면, 그 마커의 위치(data-raw-start/end)와
-// 텍스트를 그대로 부모 창에 postMessage로 전달한다.
-// (드래그 부분 선택 대신 이미 검증된 노드 단위 통째 선택만 지원 — 훨씬 단순하고 안정적)
-const CLICK_SELECT_SCRIPT = `
-<style>
-  .kdoc-clickable { cursor: pointer; }
-  .kdoc-clickable:hover { background: rgba(37,99,235,0.12); outline: 1px dashed rgba(37,99,235,0.4); border-radius: 2px; }
-</style>
-<script>
-document.addEventListener('click', function(e) {
-  const markerEl = e.target.closest ? e.target.closest('.kdoc-clickable') : null;
-  if (!markerEl) return;
-  e.preventDefault();
-
-  const rawStart = parseInt(markerEl.getAttribute('data-raw-start'), 10);
-  const rawEnd = parseInt(markerEl.getAttribute('data-raw-end'), 10);
-  const text = markerEl.textContent;
-  if (isNaN(rawStart) || isNaN(rawEnd) || !text) return;
-
-  window.parent.postMessage({
-    kdocClickSelect: true,
-    text: text,
-    rawStart: rawStart,
-    rawEnd: rawEnd
-  }, '*');
-});
-<` + `/script>
-`;
-
-// Step2 전용 렌더 — 기존 renderPreview와 동일한 외관이지만 클릭 가능 마커가 추가됨
-function renderPreviewWithDrag(containerId, html, vars) {
-  const container = document.getElementById(containerId);
-  if (!container) return;
-
-  // chip 치환과 클릭 마커 삽입을 원본 HTML 좌표계 기준으로 한 번에 처리
-  // (별도 단계로 나누면 chip 삽입 후 길이가 변해 좌표가 어긋나는 버그가 생기므로 반드시 통합 처리)
-  let injected = injectChipsAndClickableMarkers(html, vars || []);
-  injected = dimHeaderFields(injected);
-  // dimHeaderFields가 DOMParser로 재파싱/직렬화하므로, 클릭 스크립트는 그 이후에 추가해야
-  // 스크립트 태그가 보존된다 (head 끝에 삽입)
-  if (injected.includes('</head>')) {
-    injected = injected.replace('</head>', CLICK_SELECT_SCRIPT + '</head>');
-  } else {
-    injected = CLICK_SELECT_SCRIPT + injected;
-  }
-
-  let iframe = container.querySelector('iframe.doc-iframe');
-  if (!iframe) {
-    iframe = document.createElement('iframe');
-    iframe.className = 'doc-iframe';
-    iframe.style.cssText = 'width:100%;border:none;background:white;display:block;';
-    container.innerHTML = '';
-    container.appendChild(iframe);
-  }
-
-  iframe.srcdoc = injected;
-  iframe.onload = () => {
-    try {
-      const h = iframe.contentDocument.body.scrollHeight;
-      iframe.style.height = Math.max(h + 40, 400) + 'px';
-    } catch(e) {
-      iframe.style.height = '600px';
-    }
-  };
-  iframe.style.height = '600px';
-}
-
-// 클릭 선택 메시지를 받아서 처리 (Step2가 활성화된 동안만 동작)
-window.addEventListener('message', (event) => {
-  if (!event.data || !event.data.kdocClickSelect) return;
-  if (state.step !== 2) return;
-
-  const { text, rawStart, rawEnd } = event.data;
-
-  if (isRemapping && vepIdx >= 0) {
-    // 재지정 모드: 편집 패널의 변수를 새 위치로 업데이트
-    // rawSlice와 text 일치 안전장치
-    const rawSlice = state.templateHtml.slice(rawStart, rawEnd);
-    if (rawSlice.replace(/&nbsp;/g, ' ') !== text) {
-      toast('위치를 확인할 수 없습니다. 다시 클릭해주세요', 'error');
-      return;
-    }
-    state.vars[vepIdx].matchText = text;
-    state.vars[vepIdx].rawStart = rawStart;
-    state.vars[vepIdx].rawEnd = rawEnd;
-    if (!state.vars[vepIdx].example) state.vars[vepIdx].example = text;
-    updateVepMatchDisplay(text);
-    stopRemap();
-    renderVarsList();
-    renderPreviewWithDrag('doc-render', state.templateHtml, state.vars);
-    toast('위치가 지정됐습니다. 저장 버튼으로 확정하세요');
-  } else {
-    // 일반 모드: 새 변수 추가 (기존 onClickSelectText 로직)
-    onClickSelectText(text, rawStart, rawEnd);
-  }
-});
 
 // iframe으로 렌더 — MHT 원본 스타일 100% 보존 (matchText 자리에 chip 주입)
 function renderPreview(containerId, html, vars) {
@@ -1731,7 +1598,7 @@ function showStep2() {
   document.getElementById('diff-banner-text').textContent =
     `같은 양식 감지됨 — AI가 ${varCount}개 변수를 자동 추출했어요`;
 
-  renderPreviewWithDrag('doc-render', state.templateHtml, state.vars);
+  renderPreview('doc-render', state.templateHtml, state.vars);
   renderVarsList();
 }
 
@@ -1780,14 +1647,117 @@ function updateVar(idx, field, value) {
   state.vars[idx][field] = value;
   if (field === 'type') {
     renderVarsList();
-    renderPreviewWithDrag('doc-render', state.templateHtml, state.vars);
+    renderPreview('doc-render', state.templateHtml, state.vars);
   }
 }
 
 function deleteVar(idx) {
   state.vars.splice(idx, 1);
   renderVarsList();
-  renderPreviewWithDrag('doc-render', state.templateHtml, state.vars);
+  renderPreview('doc-render', state.templateHtml, state.vars);
+}
+
+// AI에게 자연어 설명을 보내 변수 목록 전체를 재분석해서 업데이트한다.
+// 기존 diff 결과(cleanDiffs)를 컨텍스트로 함께 전달해 AI가 정확히 매핑할 수 있게 한다.
+async function runAiReanalyze() {
+  const input = document.getElementById('ai-reanalyze-input');
+  const userRequest = (input.value || '').trim();
+  if (!userRequest) { toast('수정 요청 내용을 입력해주세요', 'error'); return; }
+  if (!state.templateHtml) { toast('먼저 분석을 실행해주세요', 'error'); return; }
+
+  const btn = document.getElementById('btn-ai-reanalyze');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> AI 재분석 중...';
+
+  try {
+    // 현재 변수 목록과 사용자 요청을 함께 보내 AI가 맥락 있게 수정하도록 함
+    const currentVars = state.vars.map(v => `${v.key} (${v.type}): 원본="${v.matchText||'미지정'}"`).join('\n');
+
+    // cleanDiffs가 state에 없으니 templateHtml에서 텍스트 노드를 추출해 AI에게 보냄
+    const nodes = extractTextNodes(state.templateHtml);
+    const textSample = nodes
+      .filter(n => n.text.length > 1 && n.text.length < 80)
+      .slice(0, 60)
+      .map((n, i) => `[${i}] "${n.text}"`)
+      .join('\n');
+
+    const prompt = `당신은 한국 회사 공문 양식에서 매월 바뀌는 값을 변수로 정의하는 어시스턴트입니다.
+
+[현재 자동 추출된 변수 목록]
+${currentVars || '(없음)'}
+
+[본문 텍스트 노드 목록 (인덱스: 텍스트)]
+${textSample}
+
+[사용자 수정 요청]
+${userRequest}
+
+위 요청을 반영해서 변수 목록을 수정하거나 새 변수를 추가해주세요.
+
+규칙:
+- key는 한글로 간결하게
+- type: text(날짜/문자), amount(금액), calc(자동계산)
+- matchText는 [본문 텍스트 노드 목록]에 있는 텍스트 중 정확히 일치하는 것을 사용 (없으면 빈 문자열)
+- calc이면 formula도 작성 ("키1 + 키2" 또는 "키1 × 0.1" 형식)
+- 기존 변수는 수정 요청이 없으면 그대로 유지
+- 완성된 전체 변수 목록을 반환 (기존 + 수정 + 신규 합산)
+
+아래 JSON 배열로만 응답하세요:
+[{"key":"청구연월","type":"text","matchText":"26년5월","formula":"","example":"26년5월"}, ...]`;
+
+    const resp = await fetch(`${API_BASE}/claude`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 4000,
+        messages: [{ role: 'user', content: prompt }]
+      })
+    });
+    if (!resp.ok) throw new Error(`AI 요청 실패 (${resp.status})`);
+    const data = await resp.json();
+    let text = data.content?.[0]?.text || '[]';
+    text = text.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
+    const jsonMatch = text.match(/\[[\s\S]*\]/);
+    if (!jsonMatch) throw new Error('AI 응답을 해석하지 못했습니다');
+    const parsed = JSON.parse(jsonMatch[0]);
+
+    // matchText가 실제 본문에 있는지 검증하고 rawStart/rawEnd 계산
+    const newVars = [];
+    for (const item of parsed) {
+      if (!item.key) continue;
+      const varObj = {
+        key: item.key,
+        type: item.type || 'text',
+        formula: item.formula || '',
+        example: item.example || item.matchText || '',
+        matchText: '',
+        rawStart: undefined,
+        rawEnd: undefined
+      };
+      if (item.matchText) {
+        const found = nodes.find(n => n.text === item.matchText || n.text.includes(item.matchText));
+        if (found) {
+          const offset = found.text.indexOf(item.matchText);
+          varObj.matchText = item.matchText;
+          varObj.rawStart = found.rawStart + offset;
+          varObj.rawEnd = varObj.rawStart + item.matchText.length;
+        }
+      }
+      newVars.push(varObj);
+    }
+
+    state.vars = newVars;
+    renderVarsList();
+    renderPreview('doc-render', state.templateHtml, state.vars);
+    input.value = '';
+    toast(`변수 목록이 ${newVars.length}개로 업데이트됐습니다`, 'success');
+  } catch (err) {
+    toast('재분석 실패: ' + err.message, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = 'AI 재분석해서 변수 목록 업데이트';
+  }
 }
 
 function addVar() {
@@ -1884,7 +1854,7 @@ ${desc}
     });
 
     renderVarsList();
-    renderPreviewWithDrag('doc-render', state.templateHtml, state.vars);
+    renderPreview('doc-render', state.templateHtml, state.vars);
     input.value = '';
     toast(`"${parsed.key}" 자동계산 변수 추가됨`, 'success');
   } catch (err) {
@@ -2546,23 +2516,18 @@ function closeModalForce() {
 // ===================================================
 // 변수 편집 슬라이드 패널
 // ===================================================
-let vepIdx = -1;          // 현재 편집 중인 변수 인덱스
-let isRemapping = false;  // 문서 클릭 재지정 모드 활성화 여부
+let vepIdx = -1;
 
 function openVarEditPanel(idx) {
   vepIdx = idx;
-  isRemapping = false;
   const v = state.vars[idx];
   if (!v) return;
-
   document.getElementById('vep-key').value = v.key || '';
   document.getElementById('vep-type').value = v.type || 'text';
   document.getElementById('vep-formula').value = v.formula || '';
   document.getElementById('vep-example').value = v.example || v.matchText || '';
+  document.getElementById('vep-matchtext').value = v.matchText || '';
   onVepTypeChange();
-  updateVepMatchDisplay(v.matchText);
-  document.getElementById('btn-remap').classList.remove('active-remap');
-  document.getElementById('vep-remap-hint').style.display = 'none';
   document.getElementById('var-edit-overlay').classList.add('open');
   setTimeout(() => document.getElementById('vep-key').focus(), 60);
 }
@@ -2570,12 +2535,10 @@ function openVarEditPanel(idx) {
 function closeVarEditPanel(e) {
   if (e && e.target !== document.getElementById('var-edit-overlay')) return;
   document.getElementById('var-edit-overlay').classList.remove('open');
-  stopRemap();
 }
 
 function closeVarEditPanelForce() {
   document.getElementById('var-edit-overlay').classList.remove('open');
-  stopRemap();
 }
 
 function onVepTypeChange() {
@@ -2583,36 +2546,44 @@ function onVepTypeChange() {
   document.getElementById('vep-formula-wrap').style.display = type === 'calc' ? 'block' : 'none';
 }
 
-function updateVepMatchDisplay(matchText) {
-  const el = document.getElementById('vep-match-text');
-  if (matchText) {
-    el.className = 'var-edit-match-text';
-    el.textContent = matchText.slice(0, 60) + (matchText.length > 60 ? '…' : '');
-  } else {
-    el.className = 'var-edit-match-empty';
-    el.textContent = '미지정 — 아래 버튼으로 문서에서 지정하세요';
+// matchText 직접 입력 후 본문에서 위치 검색해서 매칭
+function applyMatchText() {
+  const rawText = document.getElementById('vep-matchtext').value.trim();
+  if (!rawText) { toast('본문 텍스트를 입력하세요', 'error'); return; }
+  const nodes = extractTextNodes(state.templateHtml);
+  const found = nodes.find(n => n.text === rawText || n.text.includes(rawText));
+  if (!found) {
+    toast(`"${rawText}"을 본문에서 찾지 못했습니다`, 'error');
+    return;
   }
+  // 부분 문자열인 경우 정밀 위치 재계산
+  const offsetInNode = found.text.indexOf(rawText);
+  const preciseStart = found.rawStart + offsetInNode;
+  const preciseEnd = preciseStart + rawText.length;
+  // 안전장치
+  const rawSlice = state.templateHtml.slice(preciseStart, preciseEnd).replace(/&nbsp;/g, ' ');
+  if (rawSlice !== rawText) { toast('위치를 정확히 특정할 수 없습니다', 'error'); return; }
+  state.vars[vepIdx].matchText = rawText;
+  state.vars[vepIdx].rawStart = preciseStart;
+  state.vars[vepIdx].rawEnd = preciseEnd;
+  toast(`위치 지정 완료: "${rawText}"`, 'success');
+  renderVarsList();
+  renderPreview('doc-render', state.templateHtml, state.vars);
 }
 
-// 저장 — 편집 내용을 state.vars에 반영하고 미리보기 갱신
 function saveVarEdit() {
   if (vepIdx < 0 || vepIdx >= state.vars.length) return;
   const key = document.getElementById('vep-key').value.trim();
   if (!key) { toast('변수 이름을 입력하세요', 'error'); return; }
-
-  // 다른 변수와 key 중복 체크 (자기 자신 제외)
   const dupIdx = state.vars.findIndex((v, i) => i !== vepIdx && v.key === key);
   if (dupIdx >= 0) { toast(`"${key}" 이름이 이미 있습니다`, 'error'); return; }
-
-  const oldKey = state.vars[vepIdx].key;
   state.vars[vepIdx].key = key;
   state.vars[vepIdx].type = document.getElementById('vep-type').value;
   state.vars[vepIdx].formula = document.getElementById('vep-formula').value.trim();
   state.vars[vepIdx].example = document.getElementById('vep-example').value.trim();
-
   closeVarEditPanelForce();
   renderVarsList();
-  renderPreviewWithDrag('doc-render', state.templateHtml, state.vars);
+  renderPreview('doc-render', state.templateHtml, state.vars);
   toast(`"${key}" 저장됨`, 'success');
 }
 
@@ -2622,168 +2593,15 @@ function deleteVarFromPanel() {
   state.vars.splice(vepIdx, 1);
   closeVarEditPanelForce();
   renderVarsList();
-  renderPreviewWithDrag('doc-render', state.templateHtml, state.vars);
+  renderPreview('doc-render', state.templateHtml, state.vars);
   toast(`"${key}" 삭제됨`);
 }
 
-// ── 재지정 모드 ──────────────────────────────
-// 버튼 클릭 → 재지정 모드 ON → 왼쪽 문서 클릭 대기
-// postMessage(kdocClickSelect)가 오면 해당 위치로 matchText/rawStart/rawEnd 갱신
-function startRemap() {
-  if (vepIdx < 0) return;
-  isRemapping = true;
-  document.getElementById('btn-remap').classList.add('active-remap');
-  document.getElementById('btn-remap').textContent = '🎯 클릭 대기 중… (ESC 취소)';
-  document.getElementById('vep-remap-hint').style.display = 'block';
-}
-
-function stopRemap() {
-  isRemapping = false;
-  const btn = document.getElementById('btn-remap');
-  if (btn) {
-    btn.classList.remove('active-remap');
-    btn.textContent = '📍 문서에서 클릭해서 위치 재지정';
-    document.getElementById('vep-remap-hint').style.display = 'none';
-  }
-}
-
-// ESC 키로 재지정 모드 취소
 document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape') {
-    if (isRemapping) { stopRemap(); return; }
-    if (document.getElementById('var-edit-overlay')?.classList.contains('open')) {
-      closeVarEditPanelForce();
-    }
+  if (e.key === 'Escape' && document.getElementById('var-edit-overlay')?.classList.contains('open')) {
+    closeVarEditPanelForce();
   }
 });
-
-// ===================================================
-// 클릭으로 변수 추가하기
-// ===================================================
-
-// 클릭으로 선택된 텍스트를 받아 AI에게 변수명을 제안받고, 모달로 확인/수정 후 추가한다.
-async function onClickSelectText(selectedText, rawStart, rawEnd) {
-  // 위치가 원본 templateHtml과 정확히 일치하는지 먼저 검증 (안전장치)
-  const rawSlice = state.templateHtml.slice(rawStart, rawEnd);
-  if (rawSlice.replace(/&nbsp;/g, ' ') !== selectedText) {
-    toast('선택한 위치를 정확히 찾지 못했습니다. 다시 선택해주세요', 'error');
-    return;
-  }
-
-  // 이미 변수로 쓰인 범위와 겹치는지 다시 한번 확인 (마커가 제외했어도 이중 안전장치)
-  const overlapsExisting = state.vars.some(v => {
-    const occs = (v.occurrences && v.occurrences.length) ? v.occurrences : [{ rawStart: v.rawStart, rawEnd: v.rawEnd }];
-    return occs.some(o => typeof o.rawStart === 'number' && !(rawEnd <= o.rawStart || rawStart >= o.rawEnd));
-  });
-  if (overlapsExisting) {
-    toast('이미 변수로 등록된 부분입니다', 'error');
-    return;
-  }
-
-  openClickVarModal(selectedText, rawStart, rawEnd, null); // AI 제안 전, 우선 로딩 상태로 모달 표시
-
-  // AI에게 변수명/타입 제안 요청 (실패해도 모달에서 직접 입력 가능하도록 진행)
-  let suggestion = { key: '', type: 'text' };
-  try {
-    suggestion = await suggestVarNameForText(selectedText);
-  } catch (e) {
-    // 제안 실패 시 빈 값으로 두고 사용자가 직접 입력하게 함
-  }
-  openClickVarModal(selectedText, rawStart, rawEnd, suggestion);
-}
-
-async function suggestVarNameForText(selectedText) {
-  const existingKeys = state.vars.map(v => v.key).join(', ');
-  const prompt = `한국 회사 공문 문서에서 다음 텍스트가 선택되었습니다: "${selectedText}"
-이미 등록된 변수 이름: ${existingKeys || '(없음)'}
-
-이 텍스트가 무엇을 의미하는지 보고, 적절한 한글 변수명(key)과 타입(text 또는 amount)을 제안하세요.
-- key는 간결한 한글로, 기존 변수명과 겹치지 않게
-- 금액(숫자+쉼표)이면 amount, 그 외(날짜/기간/이름 등)는 text
-
-아래 JSON 객체 형식으로만 응답하세요. 다른 설명 없이 JSON만 출력하세요:
-{"key":"제안된변수명","type":"text"}`;
-
-  const resp = await fetch(`${API_BASE}/claude`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      model: 'claude-sonnet-4-6',
-      max_tokens: 300,
-      messages: [{ role: 'user', content: prompt }]
-    })
-  });
-  if (!resp.ok) throw new Error('AI 제안 요청 실패');
-  const data = await resp.json();
-  let resultText = data.content?.[0]?.text || '{}';
-  resultText = resultText.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
-  const jsonMatch = resultText.match(/\{[\s\S]*\}/);
-  if (!jsonMatch) throw new Error('AI 응답 해석 실패');
-  return JSON.parse(jsonMatch[0]);
-}
-
-function openClickVarModal(selectedText, rawStart, rawEnd, suggestion) {
-  document.getElementById('modal-title').textContent = '변수로 추가하기';
-
-  const isLoading = suggestion === null;
-  const suggestedKey = suggestion ? suggestion.key : '';
-  const suggestedType = suggestion ? (suggestion.type || 'text') : 'text';
-
-  document.getElementById('modal-body').innerHTML = `
-    <div style="font-size:12px;color:var(--text-muted);margin-bottom:4px;">선택한 텍스트</div>
-    <div style="font-size:13px;font-weight:600;color:var(--blue);background:var(--blue-light);padding:8px 10px;border-radius:6px;margin-bottom:14px;word-break:break-all;">${escapeHtml(selectedText)}</div>
-
-    <div class="modal-field">
-      <label>변수 이름 ${isLoading ? '<span style="color:var(--text-muted);font-weight:400;">(AI 제안 분석 중...)</span>' : '<span style="color:var(--green);font-weight:400;">(AI 제안 — 수정 가능)</span>'}</label>
-      <input type="text" id="drag-var-key" value="${escapeHtml(suggestedKey)}" placeholder="${isLoading ? '분석 중...' : '예: 청구연월'}">
-    </div>
-    <div class="modal-field">
-      <label>타입</label>
-      <select id="drag-var-type">
-        <option value="text" ${suggestedType==='text'?'selected':''}>text (일반 텍스트)</option>
-        <option value="amount" ${suggestedType==='amount'?'selected':''}>amount (금액)</option>
-      </select>
-    </div>
-  `;
-
-  document.getElementById('modal-actions').innerHTML = `
-    <button class="btn-cancel" onclick="closeModalForce()">취소</button>
-    <button class="btn-primary" onclick="confirmClickVarAdd(${rawStart}, ${rawEnd})">추가하기</button>
-  `;
-
-  document.getElementById('modal-overlay').classList.add('open');
-
-  // 선택 즉시 입력 가능하도록 포커스
-  setTimeout(() => {
-    const input = document.getElementById('drag-var-key');
-    if (input) { input.focus(); input.select(); }
-  }, 50);
-}
-
-function confirmClickVarAdd(rawStart, rawEnd) {
-  const keyInput = document.getElementById('drag-var-key');
-  const typeSelect = document.getElementById('drag-var-type');
-  const key = (keyInput.value || '').trim();
-  const type = typeSelect.value;
-
-  if (!key) { toast('변수 이름을 입력해주세요', 'error'); return; }
-  if (state.vars.some(v => v.key === key)) { toast(`"${key}" 변수가 이미 존재합니다`, 'error'); return; }
-
-  const matchText = state.templateHtml.slice(rawStart, rawEnd);
-
-  state.vars.push({
-    key, type,
-    formula: '',
-    example: matchText,
-    matchText,
-    rawStart, rawEnd
-  });
-
-  closeModalForce();
-  renderVarsList();
-  renderPreviewWithDrag('doc-render', state.templateHtml, state.vars);
-  toast(`"${key}" 변수가 추가되었습니다`, 'success');
-}
 
 // ===================================================
 // TOAST
