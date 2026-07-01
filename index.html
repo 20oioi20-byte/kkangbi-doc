@@ -590,6 +590,103 @@ a { text-decoration: none; color: inherit; }
 }
 .add-var-btn:hover { background: var(--blue-light); color: var(--blue); border-color: var(--blue); }
 
+/* ===== 변수 편집 슬라이드 패널 ===== */
+.var-edit-panel-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.25);
+  z-index: 150; opacity: 0; pointer-events: none; transition: opacity .2s;
+}
+.var-edit-panel-overlay.open { opacity: 1; pointer-events: all; }
+.var-edit-panel {
+  position: fixed; right: 0; top: 0; bottom: 0;
+  width: 340px; background: var(--surface);
+  box-shadow: -4px 0 20px rgba(0,0,0,0.12);
+  z-index: 151; display: flex; flex-direction: column;
+  transform: translateX(100%); transition: transform .25s ease;
+}
+.var-edit-panel-overlay.open .var-edit-panel { transform: translateX(0); }
+.var-edit-panel-header {
+  padding: 16px 18px; border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: space-between;
+  background: var(--surface2);
+}
+.var-edit-panel-title { font-size: 14px; font-weight: 700; }
+.var-edit-panel-close {
+  width: 28px; height: 28px; border-radius: 6px;
+  background: transparent; color: var(--text-muted);
+  font-size: 18px; display: flex; align-items: center; justify-content: center;
+  transition: all .15s;
+}
+.var-edit-panel-close:hover { background: var(--surface2); color: var(--text-primary); }
+.var-edit-panel-body { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 14px; }
+.var-edit-field label {
+  font-size: 11px; font-weight: 600; color: var(--text-secondary);
+  display: block; margin-bottom: 5px;
+}
+.var-edit-field input, .var-edit-field select, .var-edit-field textarea {
+  width: 100%; padding: 8px 10px;
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
+  font-size: 13px; font-family: inherit; transition: border-color .15s;
+}
+.var-edit-field input:focus, .var-edit-field select:focus, .var-edit-field textarea:focus {
+  border-color: var(--blue); outline: none;
+  box-shadow: 0 0 0 3px rgba(37,99,235,.08);
+}
+.var-edit-field textarea { min-height: 60px; resize: vertical; }
+.var-edit-match-box {
+  background: var(--surface2); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); padding: 8px 10px;
+  font-size: 12px;
+}
+.var-edit-match-text {
+  color: var(--blue); font-weight: 600; word-break: break-all;
+  font-family: monospace; font-size: 12px;
+}
+.var-edit-match-empty { color: var(--text-muted); font-style: italic; }
+.btn-remap {
+  width: 100%; padding: 8px; margin-top: 6px;
+  border: 1px dashed var(--blue); background: var(--blue-light);
+  color: var(--blue); border-radius: var(--radius-sm);
+  font-size: 12px; font-weight: 600; transition: all .15s;
+}
+.btn-remap:hover { background: #BFCFFF; }
+.btn-remap.active-remap {
+  background: #FEF9C3; border-color: var(--amber); color: var(--amber);
+  animation: pulse .8s ease infinite;
+}
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.6} }
+.var-edit-panel-footer {
+  padding: 14px 18px; border-top: 1px solid var(--border);
+  display: flex; gap: 8px; background: var(--surface);
+}
+.btn-edit-save {
+  flex: 1; background: var(--blue); color: #fff;
+  padding: 10px; border-radius: var(--radius-sm);
+  font-size: 13px; font-weight: 600; transition: all .15s;
+}
+.btn-edit-save:hover { background: #1d4ed8; }
+.btn-edit-delete {
+  background: var(--red-light); color: var(--red);
+  padding: 10px 14px; border-radius: var(--radius-sm);
+  font-size: 13px; font-weight: 600; transition: all .15s;
+  border: 1px solid #FECACA;
+}
+.btn-edit-delete:hover { background: #FEE2E2; }
+/* 편집 버튼 (변수 행에 추가) */
+.var-edit-btn {
+  color: var(--text-muted); font-size: 13px; padding: 3px 6px;
+  border-radius: 4px; background: transparent; line-height: 1;
+  transition: all .12s;
+}
+.var-edit-btn:hover { color: var(--blue); background: var(--blue-light); }
+/* 템플릿 카드 편집 버튼 */
+.btn-edit-tpl {
+  background: var(--surface2); color: var(--text-secondary);
+  padding: 5px 12px; border-radius: var(--radius-sm);
+  font-size: 12px; font-weight: 500; border: 1px solid var(--border);
+  transition: all .15s;
+}
+.btn-edit-tpl:hover { background: var(--border); }
+
 /* AI 자동계산 변수 추가 박스 */
 .ai-calc-box {
   margin: 10px 16px 4px;
@@ -868,6 +965,54 @@ a { text-decoration: none; color: inherit; }
 
 <!-- TOAST -->
 <div class="toast-container" id="toast-container"></div>
+
+<!-- 변수 편집 슬라이드 패널 -->
+<div class="var-edit-panel-overlay" id="var-edit-overlay" onclick="closeVarEditPanel(event)">
+  <div class="var-edit-panel" onclick="event.stopPropagation()">
+    <div class="var-edit-panel-header">
+      <div class="var-edit-panel-title">✏️ 변수 편집</div>
+      <button class="var-edit-panel-close" onclick="closeVarEditPanel()">×</button>
+    </div>
+    <div class="var-edit-panel-body">
+      <div class="var-edit-field">
+        <label>변수 이름 (key)</label>
+        <input type="text" id="vep-key" placeholder="예: 청구연월">
+      </div>
+      <div class="var-edit-field">
+        <label>타입</label>
+        <select id="vep-type" onchange="onVepTypeChange()">
+          <option value="text">text — 날짜/기간/문자</option>
+          <option value="amount">amount — 금액/숫자</option>
+          <option value="calc">calc — 자동계산</option>
+        </select>
+      </div>
+      <div class="var-edit-field" id="vep-formula-wrap" style="display:none">
+        <label>수식 (calc 전용)</label>
+        <input type="text" id="vep-formula" placeholder="예: LG공급가액 + ASP공급가액">
+      </div>
+      <div class="var-edit-field">
+        <label>예시값</label>
+        <input type="text" id="vep-example" placeholder="예: 26년6월">
+      </div>
+      <div class="var-edit-field">
+        <label>본문 매칭 위치</label>
+        <div class="var-edit-match-box">
+          <div id="vep-match-text" class="var-edit-match-empty">미지정</div>
+        </div>
+        <button class="btn-remap" id="btn-remap" onclick="startRemap()">
+          📍 문서에서 클릭해서 위치 재지정
+        </button>
+        <div id="vep-remap-hint" style="font-size:11px;color:var(--text-muted);margin-top:4px;display:none;">
+          왼쪽 문서에서 원하는 텍스트를 클릭하세요. ESC로 취소.
+        </div>
+      </div>
+    </div>
+    <div class="var-edit-panel-footer">
+      <button class="btn-edit-delete" onclick="deleteVarFromPanel()">삭제</button>
+      <button class="btn-edit-save" onclick="saveVarEdit()">저장</button>
+    </div>
+  </div>
+</div>
 
 <!-- MODAL -->
 <div class="modal-overlay" id="modal-overlay" onclick="closeModal(event)">
@@ -1289,8 +1434,31 @@ function renderPreviewWithDrag(containerId, html, vars) {
 // 클릭 선택 메시지를 받아서 처리 (Step2가 활성화된 동안만 동작)
 window.addEventListener('message', (event) => {
   if (!event.data || !event.data.kdocClickSelect) return;
-  if (state.step !== 2) return; // Step2가 아닐 때는 무시 (다른 화면의 iframe과 혼선 방지)
-  onClickSelectText(event.data.text, event.data.rawStart, event.data.rawEnd);
+  if (state.step !== 2) return;
+
+  const { text, rawStart, rawEnd } = event.data;
+
+  if (isRemapping && vepIdx >= 0) {
+    // 재지정 모드: 편집 패널의 변수를 새 위치로 업데이트
+    // rawSlice와 text 일치 안전장치
+    const rawSlice = state.templateHtml.slice(rawStart, rawEnd);
+    if (rawSlice.replace(/&nbsp;/g, ' ') !== text) {
+      toast('위치를 확인할 수 없습니다. 다시 클릭해주세요', 'error');
+      return;
+    }
+    state.vars[vepIdx].matchText = text;
+    state.vars[vepIdx].rawStart = rawStart;
+    state.vars[vepIdx].rawEnd = rawEnd;
+    if (!state.vars[vepIdx].example) state.vars[vepIdx].example = text;
+    updateVepMatchDisplay(text);
+    stopRemap();
+    renderVarsList();
+    renderPreviewWithDrag('doc-render', state.templateHtml, state.vars);
+    toast('위치가 지정됐습니다. 저장 버튼으로 확정하세요');
+  } else {
+    // 일반 모드: 새 변수 추가 (기존 onClickSelectText 로직)
+    onClickSelectText(text, rawStart, rawEnd);
+  }
 });
 
 // iframe으로 렌더 — MHT 원본 스타일 100% 보존 (matchText 자리에 chip 주입)
@@ -1587,24 +1755,23 @@ function renderVarsList() {
 }
 
 function renderVarRow(v, idx) {
-  const typeColor = { text: 'var(--blue)', amount: '#7C3AED', calc: 'var(--amber)' };
   const dotClass = { text: 'text', amount: 'amount', calc: 'calc' }[v.type];
-  
   return `
   <div class="var-row" id="varrow-${idx}">
     <div class="var-dot ${dotClass}"></div>
     <div class="var-info">
-      <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
-        <input class="var-key-input" value="${v.key}" onchange="updateVar(${idx},'key',this.value)" style="flex:1;">
-        <select class="var-type-select" onchange="updateVar(${idx},'type',this.value)">
-          <option value="text" ${v.type==='text'?'selected':''}>text</option>
-          <option value="amount" ${v.type==='amount'?'selected':''}>amount</option>
-          <option value="calc" ${v.type==='calc'?'selected':''}>calc</option>
-        </select>
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px;">
+        <span style="font-size:13px;font-weight:600;color:var(--text-primary);font-family:monospace;flex:1;">{{${v.key}}}</span>
+        <span class="var-type-badge ${v.type === 'calc' ? 'type-calc' : v.type === 'amount' ? 'type-amount' : 'type-text'}">${v.type}</span>
+        <button class="var-edit-btn" onclick="openVarEditPanel(${idx})" title="편집">✏️</button>
         <button class="var-del-btn" onclick="deleteVar(${idx})">×</button>
       </div>
-      ${v.type === 'calc' ? `<input class="var-formula-input" value="${v.formula}" placeholder="수식: 공급가액 × 0.1" onchange="updateVar(${idx},'formula',this.value)">` : ''}
-      <div style="font-size:11px;color:var(--text-muted);margin-top:3px;">원본 텍스트: <span style="color:#1d4ed8;font-weight:600;">${(v.matchText||'').slice(0,40)}</span></div>
+      ${v.type === 'calc' && v.formula ? `<div style="font-size:11px;color:var(--amber);margin-top:1px;">수식: ${v.formula}</div>` : ''}
+      <div style="font-size:11px;color:var(--text-muted);margin-top:2px;">
+        원본: <span style="color:${v.matchText ? '#2563EB' : 'var(--text-muted)'};">
+          ${v.matchText ? v.matchText.slice(0,35) + (v.matchText.length > 35 ? '…' : '') : '⚠️ 위치 미지정'}
+        </span>
+      </div>
     </div>
   </div>`;
 }
@@ -1848,8 +2015,6 @@ async function saveFinalTemplate() {
   const name = document.getElementById('tpl-name').value.trim();
   if (!name) { toast('양식 이름을 입력하세요', 'error'); return; }
 
-  // state.aiCorrectedHtml은 runAiFormat에서 이미 chip이 박힌 상태로 생성됨.
-  // state.templateHtml(AI 교정을 안 거친 원본)은 아직 chip이 없으므로 여기서 주입해야 함.
   const finalHtmlWithChips = state.aiCorrectedHtml
     ? state.aiCorrectedHtml
     : injectVarChipsIntoHtml(state.templateHtml, state.vars);
@@ -1863,14 +2028,31 @@ async function saveFinalTemplate() {
     use_count: 0
   };
 
+  const isEdit = typeof state.editingTplIdx === 'number';
+
   try {
-    // Supabase 저장
-    await sbInsert('doc_templates', tpl);
-    toast(`"${name}" 저장 완료`, 'success');
+    if (isEdit) {
+      // 편집 모드: 기존 템플릿을 localStorage에서 덮어씀
+      // Supabase에도 id가 있으면 PATCH 처리 (현재 sbInsert는 POST만 지원하므로 로컬 우선)
+      const local = JSON.parse(localStorage.getItem('kkangbi_templates') || '[]');
+      if (local[state.editingTplIdx]) {
+        tpl.id = local[state.editingTplIdx].id;
+        local[state.editingTplIdx] = tpl;
+      } else {
+        tpl.id = Date.now();
+        local.push(tpl);
+      }
+      localStorage.setItem('kkangbi_templates', JSON.stringify(local));
+      state.editingTplIdx = undefined;
+      toast(`"${name}" 업데이트 완료`, 'success');
+    } else {
+      // 신규 등록
+      await sbInsert('doc_templates', tpl);
+      toast(`"${name}" 저장 완료`, 'success');
+    }
     setStepActive(4);
     setTimeout(() => { goPage('templates'); loadTemplates(); }, 1200);
   } catch (err) {
-    // localStorage fallback
     const local = JSON.parse(localStorage.getItem('kkangbi_templates') || '[]');
     tpl.id = Date.now();
     local.push(tpl);
@@ -1933,7 +2115,10 @@ function renderTemplates(templates) {
       </div>
       <div class="tpl-card-footer">
         <div class="tpl-card-date">등록 ${date}</div>
-        <button class="btn-use-tpl" onclick="event.stopPropagation();openWrite(${i})">작성하기 →</button>
+        <div style="display:flex;gap:6px;">
+          <button class="btn-edit-tpl" onclick="event.stopPropagation();openEditTemplate(${i})">✏️ 편집</button>
+          <button class="btn-use-tpl" onclick="event.stopPropagation();openWrite(${i})">작성하기 →</button>
+        </div>
       </div>
     </div>`;
   }).join('');
@@ -1972,6 +2157,43 @@ async function fetchLastValuesForTpl(tplName, vars) {
     }
   }
   return result;
+}
+
+// 저장된 템플릿을 Step2(변수 확인 화면)로 불러와 편집한다.
+// 저장된 tpl.html에는 chip이 박혀있으므로, chip을 원래 matchText로 복원해서 templateHtml을 재구성한다.
+function openEditTemplate(idx) {
+  const tpl = state.templates[idx];
+  if (!tpl) return;
+
+  // chip → 원본 텍스트 복원: tpl.html에서 각 변수의 chip을 matchText로 되돌린다.
+  // chip 형식: <span style="...">{{key}}</span>  (makeChipHtml이 만든 고정 패턴)
+  let restoredHtml = tpl.html || '';
+  const vars = tpl.vars || [];
+
+  // 뒤에서부터 복원할 필요는 없음 (chip 크기 → matchText 크기로 바뀌어도 split/join이 전체 대상이므로)
+  for (const v of vars) {
+    if (!v.matchText) continue;
+    const chipBlue = makeChipHtml(v.key, 'text');
+    const chipAmber = makeChipHtml(v.key, 'calc');
+    restoredHtml = restoredHtml.split(chipBlue).join(v.matchText);
+    restoredHtml = restoredHtml.split(chipAmber).join(v.matchText);
+  }
+
+  // state를 새 양식 등록 흐름과 동일하게 설정하고 Step2로 진입
+  state.templateHtml = restoredHtml;
+  state.vars = vars.map(v => ({ ...v })); // 깊은 복사
+  state.aiCorrectedHtml = null;
+  state.editingTplIdx = idx;   // 재저장 시 덮어쓸 인덱스 기억
+
+  goPage('new');
+  showStep2();
+
+  // 배너에 편집 모드임을 표시
+  document.getElementById('diff-banner-text').textContent =
+    `"${tpl.name}" 편집 모드 — 변수 수정 후 저장하면 기존 템플릿이 업데이트됩니다`;
+  document.getElementById('diff-banner').style.background = '#FFFBEB';
+  document.getElementById('diff-banner').style.borderColor = '#FCD34D';
+  document.getElementById('diff-banner').style.color = '#92400E';
 }
 
 async function openWrite(idx) {
@@ -2273,6 +2495,15 @@ function resetNew() {
   state.htmlA = null; state.htmlB = null;
   state.vars = [];
   state.templateHtml = null; state.aiCorrectedHtml = null;
+  state.editingTplIdx = undefined;
+
+  // 배너 색상 원복 (편집 모드에서 노란색으로 바뀐 경우 대비)
+  const banner = document.getElementById('diff-banner');
+  if (banner) {
+    banner.style.background = '';
+    banner.style.borderColor = '';
+    banner.style.color = '';
+  }
 
   document.getElementById('step1-content').style.display = 'block';
   document.getElementById('step2-content').style.display = 'none';
@@ -2311,6 +2542,120 @@ function closeModal(e) {
 function closeModalForce() {
   document.getElementById('modal-overlay').classList.remove('open');
 }
+
+// ===================================================
+// 변수 편집 슬라이드 패널
+// ===================================================
+let vepIdx = -1;          // 현재 편집 중인 변수 인덱스
+let isRemapping = false;  // 문서 클릭 재지정 모드 활성화 여부
+
+function openVarEditPanel(idx) {
+  vepIdx = idx;
+  isRemapping = false;
+  const v = state.vars[idx];
+  if (!v) return;
+
+  document.getElementById('vep-key').value = v.key || '';
+  document.getElementById('vep-type').value = v.type || 'text';
+  document.getElementById('vep-formula').value = v.formula || '';
+  document.getElementById('vep-example').value = v.example || v.matchText || '';
+  onVepTypeChange();
+  updateVepMatchDisplay(v.matchText);
+  document.getElementById('btn-remap').classList.remove('active-remap');
+  document.getElementById('vep-remap-hint').style.display = 'none';
+  document.getElementById('var-edit-overlay').classList.add('open');
+  setTimeout(() => document.getElementById('vep-key').focus(), 60);
+}
+
+function closeVarEditPanel(e) {
+  if (e && e.target !== document.getElementById('var-edit-overlay')) return;
+  document.getElementById('var-edit-overlay').classList.remove('open');
+  stopRemap();
+}
+
+function closeVarEditPanelForce() {
+  document.getElementById('var-edit-overlay').classList.remove('open');
+  stopRemap();
+}
+
+function onVepTypeChange() {
+  const type = document.getElementById('vep-type').value;
+  document.getElementById('vep-formula-wrap').style.display = type === 'calc' ? 'block' : 'none';
+}
+
+function updateVepMatchDisplay(matchText) {
+  const el = document.getElementById('vep-match-text');
+  if (matchText) {
+    el.className = 'var-edit-match-text';
+    el.textContent = matchText.slice(0, 60) + (matchText.length > 60 ? '…' : '');
+  } else {
+    el.className = 'var-edit-match-empty';
+    el.textContent = '미지정 — 아래 버튼으로 문서에서 지정하세요';
+  }
+}
+
+// 저장 — 편집 내용을 state.vars에 반영하고 미리보기 갱신
+function saveVarEdit() {
+  if (vepIdx < 0 || vepIdx >= state.vars.length) return;
+  const key = document.getElementById('vep-key').value.trim();
+  if (!key) { toast('변수 이름을 입력하세요', 'error'); return; }
+
+  // 다른 변수와 key 중복 체크 (자기 자신 제외)
+  const dupIdx = state.vars.findIndex((v, i) => i !== vepIdx && v.key === key);
+  if (dupIdx >= 0) { toast(`"${key}" 이름이 이미 있습니다`, 'error'); return; }
+
+  const oldKey = state.vars[vepIdx].key;
+  state.vars[vepIdx].key = key;
+  state.vars[vepIdx].type = document.getElementById('vep-type').value;
+  state.vars[vepIdx].formula = document.getElementById('vep-formula').value.trim();
+  state.vars[vepIdx].example = document.getElementById('vep-example').value.trim();
+
+  closeVarEditPanelForce();
+  renderVarsList();
+  renderPreviewWithDrag('doc-render', state.templateHtml, state.vars);
+  toast(`"${key}" 저장됨`, 'success');
+}
+
+function deleteVarFromPanel() {
+  if (vepIdx < 0 || vepIdx >= state.vars.length) return;
+  const key = state.vars[vepIdx].key;
+  state.vars.splice(vepIdx, 1);
+  closeVarEditPanelForce();
+  renderVarsList();
+  renderPreviewWithDrag('doc-render', state.templateHtml, state.vars);
+  toast(`"${key}" 삭제됨`);
+}
+
+// ── 재지정 모드 ──────────────────────────────
+// 버튼 클릭 → 재지정 모드 ON → 왼쪽 문서 클릭 대기
+// postMessage(kdocClickSelect)가 오면 해당 위치로 matchText/rawStart/rawEnd 갱신
+function startRemap() {
+  if (vepIdx < 0) return;
+  isRemapping = true;
+  document.getElementById('btn-remap').classList.add('active-remap');
+  document.getElementById('btn-remap').textContent = '🎯 클릭 대기 중… (ESC 취소)';
+  document.getElementById('vep-remap-hint').style.display = 'block';
+}
+
+function stopRemap() {
+  isRemapping = false;
+  const btn = document.getElementById('btn-remap');
+  if (btn) {
+    btn.classList.remove('active-remap');
+    btn.textContent = '📍 문서에서 클릭해서 위치 재지정';
+    document.getElementById('vep-remap-hint').style.display = 'none';
+  }
+}
+
+// ESC 키로 재지정 모드 취소
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') {
+    if (isRemapping) { stopRemap(); return; }
+    if (document.getElementById('var-edit-overlay')?.classList.contains('open')) {
+      closeVarEditPanelForce();
+    }
+  }
+});
 
 // ===================================================
 // 클릭으로 변수 추가하기
